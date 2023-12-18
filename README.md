@@ -5,16 +5,16 @@ Rcon++ is a modern Source RCON library for C++, allowing people to easily use RC
 
 - Support for Valve and non-Valve games.
 - Non-blocking and blocking calls.
-- Header-Only (all in one file).
 
 #### To-do
 
 - Support for hosting an RCON server.
 - Support for multiple response packets.
+- Make the project header-Only (all in one file).
 
 #### Library Usage
 
-This library is used in
+This library is used in:
 - [Factorio-Discord-Relay Revamped](https://github.com/Jaskowicz1/fdr-remake)
 
 If you're using this library, feel free to message me and show me, you might just get your project shown here!
@@ -31,7 +31,7 @@ Windows is not currently supported but is planned.
 
 # Getting Started
 
-Rcon++ can only be used by adding the header into your source code.
+Rcon++ can only be used by adding the header and cpp file into your source code.
 
 From there you can easily start an RCON connection with the following:
 
