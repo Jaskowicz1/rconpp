@@ -21,7 +21,8 @@
 namespace rconpp {
 
 constexpr int DEFAULT_TIMEOUT = 4;
-constexpr int HEADER_SIZE = 14;
+constexpr int MIN_PACKET_SIZE = 10;
+constexpr int MIN_PACKET_LENGTH = 14;
 
 enum data_type {
 	/**
@@ -44,12 +45,7 @@ enum data_type {
 struct packet {
 	unsigned int bytes;
 	std::vector<char> data;
-	//unsigned char* data;
 	bool server_responded;
-
-	//~packet() {
-	//	delete[] data;
-	//}
 };
 
 struct response {
@@ -66,7 +62,7 @@ struct queued_request {
 
 class rcon {
 	const std::string address;
-	const unsigned int port;
+	const unsigned int port{0};
 	const std::string password;
 #ifdef _WIN32
 	SOCKET sock{INVALID_SOCKET};
@@ -74,18 +70,18 @@ class rcon {
 	int sock{ 0 };
 #endif
 	bool connected{false};
-	
+
 	std::vector<queued_request> requests_queued{};
-    
+
 public:
-    
+
 	/**
 	 * @brief rcon constuctor. Initiates a connection to an RCON server with the parameters given.
 	 *
 	 * @note This is a blocking call (done on purpose). It needs to wait to connect to the RCON server before anything else happens.
 	 * It will timeout after 4 seconds if it can't connect.
 	 */
-	rcon(const std::string& addr, const unsigned int _port, const std::string& pass) : address(addr), port(_port), password(pass) {
+	rcon(const std::string_view addr, const unsigned int _port, const std::string& pass) : address(addr), port(_port), password(pass) {
 
 		std::cout << "Attempting connection to RCON server..." << "\n";
 
@@ -124,22 +120,20 @@ public:
 
 				requests_queued.clear();
 			}
-			});
+		});
 
 		queue_runner.detach();
 	};
 
 	~rcon() {
-		#ifdef _WIN32
+#ifdef _WIN32
 		closesocket(sock);
 		WSACleanup();
-		#else
+#else
 		close(sock);
-		#endif
-
-
+#endif
 	}
-    
+
 	/**
 	 * @brief Send data to the connected RCON server. Requests from this function are added to a queue (`requests_queued`) and are handled by a different thread.
 	 *
@@ -149,10 +143,10 @@ public:
 	 *
 	 * @warning If you are expecting no response from the server, do NOT use the callback. You will halt the RCON process until the next received message (which will chain).
 	 */
-	void send_data(const std::string& data, const int32_t id, data_type type, std::function<void(const response& retrieved_data)> callback = {}) {
-		requests_queued.emplace_back(queued_request{data, id, type, std::move(callback)});
+	void send_data(const std::string_view data, const int32_t id, data_type type, std::function<void(const response& retrieved_data)> callback = {}) {
+		requests_queued.emplace_back(queued_request{std::string{data}, id, type, std::move(callback)});
 	}
-    
+
 	/**
 	 * @brief Send data to the connected RCON server.
 	 *
@@ -165,18 +159,20 @@ public:
 	 *
 	 * @returns Data given by the server from the request.
 	 */
-	response send_data_sync(const std::string data, const int32_t id, data_type type, bool feedback = true) {
+	response send_data_sync(const std::string_view data, const int32_t id, data_type type, bool feedback = true) {
 		if (!connected && type != data_type::SERVERDATA_AUTH) {
 			std::cout << "Cannot send data when not connected." << "\n";
 			return { "", false };
 		}
 
-		unsigned long long packet_len = data.length() + HEADER_SIZE;
 		std::vector<char> formed_packet = form_packet(data, id, type);
 
-		if (send(sock, formed_packet.data(), packet_len, 0) < 0) {
-			std::cout << "Sending failed!" << "\n";
+		if (send(sock, formed_packet.data(), formed_packet.size(), 0) < 0) {
+			std::cout << "Sending failed! Trying again..." << "\n";
+			//if (send(sock, formed_packet.data(), formed_packet.size(), 0) < 0) {
+			//	std::cout << "Sending failed again!" << "\n";
 			return { "", false };
+			//}
 		}
 
 		if (!feedback) {
@@ -187,9 +183,9 @@ public:
 		// Server will send a SERVERDATA_RESPONSE_VALUE packet.
 		return receive_information(id, type);
 	}
-    
-private:
-    
+
+	private:
+
 	/**
 	 * @brief Connects to RCON using `address`, `port`, and `password`.
 	 * Those values are pre-filled when constructing this class.
@@ -203,29 +199,18 @@ private:
 
 #ifdef _WIN32
 		if (sock == INVALID_SOCKET) {
-			std::cout << "Failed to open socket." << "\n";
-			return false;
-		}
 #else
 		if (sock == -1) {
+#endif
 			std::cout << "Failed to open socket." << "\n";
 			return false;
 		}
-#endif
 
 		// Setup port, address, and family.
 		struct sockaddr_in server{};
 		server.sin_family = AF_INET;
 		server.sin_addr.s_addr = inet_addr(address.c_str());
 		server.sin_port = htons(port);
-
-		// Make it non-blocking.
-#ifdef _WIN32
-		u_long ul{ 1 };
-		ioctlsocket(sock, FIONBIO, &ul);
-#else
-		fcntl(sock, F_SETFL, O_NONBLOCK);
-#endif
 
 		// Set a timeout of 4 seconds.
 		struct timeval tv {};
@@ -238,38 +223,27 @@ private:
 		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 #endif
 
-		// Connect to the socket and set the status to our temp status.
-		if (::connect(sock, (struct sockaddr*)&server, sizeof(server)) == -1) {
-			if (errno != EINPROGRESS) {
-				return false;
-			}
+		// Connect to the socket and set the status of the connection.
+		int status = ::connect(sock, (struct sockaddr*)&server, sizeof(server));
+
+		if (status == -1) {
+			return false;
 		}
 
-		fd_set fds;
-		FD_ZERO(&fds);
-		FD_SET(sock, &fds);
-
-		// Create temp status
-		int status = select(sock + 1, nullptr, &fds, nullptr, &tv);
-
-		//fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) & ~O_NONBLOCK);
-
-		// If status wasn't zero, we successfully connected.
-		return status != 0;
+		return true;
 	}
-    
+
 	/**
 	 * @brief Form a valid RCON packet.
 	 *
-	 * @param packet[] The packet to update information for.
 	 * @param data The data to add to the packet.
 	 * @param id The ID of the request.
 	 * @param type The type of packet.
+	 *
+	 * @returns an std::vector<char>
 	 */
-	std::vector<char> form_packet(const std::string& data, int32_t id, int32_t type) {
-		const char nullbytes[] = { '\x00', '\x00' };
-		const int32_t min_size = sizeof(id) + sizeof(type) + sizeof(nullbytes); // 10 bytes.
-		const int32_t data_size = static_cast<int32_t>(data.size()) + min_size;
+	std::vector<char> form_packet(const std::string_view data, int32_t id, int32_t type) {
+		const int32_t data_size = static_cast<int32_t>(data.size()) + MIN_PACKET_SIZE;
 
 		if (data_size > 4096) {
 			std::cout << "This packet is too big to send. Please generate a smaller packet." << "\n";
@@ -278,29 +252,16 @@ private:
 
 		std::vector<char> temp_packet;
 
-		temp_packet.resize(data_size + sizeof(data_size) + sizeof(id)); /* make sure the vector is big enough to hold all the data */
+		temp_packet.resize(data_size + 4); /* make sure the vector is big enough to hold all the data */
 
 		std::memcpy(temp_packet.data() + 0, &data_size, sizeof(data_size)); /* copy size into it */
 		std::memcpy(temp_packet.data() + sizeof(data_size), &id, sizeof(id)); /* copy id into it */
-		std::memcpy(temp_packet.data() + sizeof(data_size), &type, sizeof(type)); /* copy type into it */
-		std::memcpy(temp_packet.data() + sizeof(data_size), data.data(), data.size()); /* copy data into it */
-
-		//(memset(packet, '\0', data_size), (void)0);
-
-		// Each part is 4 bytes
-		//packet[0] = data_size;
-		//packet[4] = id;
-		//packet[8] = type;
-
-		//const char* data_chars = data.c_str();
-
-		//for (int i = 0; i < data_size; i++) {
-		//	packet[12 + i] = data_chars[i];
-		//}
+		std::memcpy(temp_packet.data() + sizeof(data_size) + sizeof(id), &type, sizeof(type)); /* copy type into it */
+		std::memcpy(temp_packet.data() + sizeof(data_size) + sizeof(id) + sizeof(type), data.data(), data.size()); /* copy data into it */
 
 		return temp_packet;
 	}
-    
+
 	/**
 	 * @brief Ask to receive information from the server for a specified ID.
 	 *
@@ -334,7 +295,7 @@ private:
 				}
 			}
 
-			int offset = packet.bytes - HEADER_SIZE + 3;
+			int offset = packet.bytes - MIN_PACKET_LENGTH + 3;
 
 			if (offset == -1)
 				continue;
@@ -347,7 +308,7 @@ private:
 		}
 		return { "", false };
 	}
-    
+
 	/**
 	 * @brief Gathers all the packet's content (based on the length returned by `read_packet_length`)
 	 */
@@ -365,38 +326,30 @@ private:
 			return { 0, {}, true };
 		}
 
-		//auto* buffer = new unsigned char[packet_length] {0};
 		std::vector<char> buffer;
 		buffer.resize(packet_length);
-		//std::string buffer;
-		unsigned int bytes = 0;
-
-		do {
-			size_t recv_bytes = recv(sock, buffer.data(), packet_length - bytes, 0);
-			if (recv_bytes == -1) {
-				std::cout << "Did not receive a packet in time. Did the server send a response?" << "\n";
-				return { 0, {}, false };
-			}
-
-			bytes += recv_bytes;
-
-		} while (bytes < packet_length);
+		unsigned int bytes = recv(sock, buffer.data(), packet_length, 0);
 
 		return { bytes, buffer };
 	}
-    
+
 	int read_packet_length() {
 		std::vector<char> buffer;
 		buffer.resize(4);
-		size_t recv_bytes = recv(sock, buffer.data(), 4, 0);
-		if (recv_bytes == -1) {
+
+		/*
+		 * RCON gives the packet LENGTH in the first four (4) bytes of each packet.
+		 * We simply just want to read that and then return it.
+		 */
+		if (recv(sock, buffer.data(), 4, 0) == -1) {
 			std::cout << "Did not receive a packet in time. Did the server send a response?" << "\n";
 			return -1;
 		}
 		return byte32_to_int(buffer);
 	}
 
-	inline int byte32_to_int(std::vector<char>& buffer) {
+	inline int byte32_to_int(const std::vector<char>& buffer) {
+		// This does heavily assume little endian.
 		return static_cast<int>(buffer[0] | buffer[1] << 8 | buffer[2] << 16 | buffer[3] << 24);
 	}
 };
