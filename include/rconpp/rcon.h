@@ -114,7 +114,7 @@ public:
 					continue;
 				}
 
-				for (queued_request request : requests_queued) {
+				for (const queued_request& request : requests_queued) {
 					// Send data to callback if it's been set.
 					if (request.callback)
 						request.callback(send_data_sync(request.data, request.id, request.type));
@@ -214,7 +214,7 @@ private:
 #endif
 
 		// Setup port, address, and family.
-		struct sockaddr_in server;
+		struct sockaddr_in server{};
 		server.sin_family = AF_INET;
 		server.sin_addr.s_addr = inet_addr(address.c_str());
 		server.sin_port = htons(port);
@@ -385,7 +385,7 @@ private:
 		return { bytes, buffer };
 	}
     
-	const int read_packet_length() {
+	int read_packet_length() {
 		std::vector<char> buffer;
 		buffer.resize(4);
 		size_t recv_bytes = recv(sock, buffer.data(), 4, 0);
@@ -396,7 +396,7 @@ private:
 		return byte32_to_int(buffer);
 	}
 
-	inline const int byte32_to_int(std::vector<char>& buffer) {
+	inline int byte32_to_int(std::vector<char>& buffer) {
 		return static_cast<int>(buffer[0] | buffer[1] << 8 | buffer[2] << 16 | buffer[3] << 24);
 	}
 };

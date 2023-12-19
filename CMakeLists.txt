@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
+
 project(rconpp
 	VERSION 0.1.0
 	LANGUAGES CXX
@@ -6,20 +7,15 @@ project(rconpp
 	DESCRIPTION "A modern Source-RCON library for C++"
 )
 
-add_library(rconpp SHARED include/rcon.h)
+include(GNUInstallDirs)
 
-target_link_directories(rconpp PUBLIC include)
+add_library(rconpp INTERFACE)
 
-target_include_directories(rconpp PUBLIC
-	"${PROJECT_BINARY_DIR}"
-	"${PROJECT_SOURCE_DIR}/include"
-)
+target_include_directories(rconpp INTERFACE include/rconpp/rcon.h)
 
 set_target_properties(rconpp PROPERTIES
 	VERSION ${CMAKE_PROJECT_VERSION}
 	SOVERSION ${CMAKE_PROJECT_VERSION}
 	POSITION_INDEPENDENT_CODE true
-	 LINKER_LANGUAGE CXX
+	LINKER_LANGUAGE CXX
 )
-
-set(CMAKE_CXX_STANDARD 17)
