@@ -81,7 +81,7 @@ public:
 	 * @note This is a blocking call (done on purpose). It needs to wait to connect to the RCON server before anything else happens.
 	 * It will timeout after 4 seconds if it can't connect.
 	 */
-	rcon(const std::string_view addr, const unsigned int _port, const std::string& pass) : address(addr), port(_port), password(pass) {
+	rcon(const std::string_view addr, const unsigned int _port, const std::string_view pass) : address(addr), port(_port), password(pass) {
 
 		std::cout << "Attempting connection to RCON server..." << "\n";
 
