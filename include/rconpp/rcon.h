@@ -77,7 +77,7 @@ class rcon {
 
 	std::thread queue_runner;
 
-public:
+	public:
 
 	/**
 	 * @brief rcon constuctor. Initiates a connection to an RCON server with the parameters given.
@@ -193,7 +193,7 @@ public:
 		return receive_information(id, type);
 	}
 
-private:
+	private:
 
 	/**
 	 * @brief Connects to RCON using `address`, `port`, and `password`.
@@ -231,7 +231,11 @@ private:
 		struct sockaddr_in server {};
 		server.sin_family = AF_INET;
 #ifdef _WIN32
+		#ifdef UNICODE
 		InetPton(AF_INET, std::wstring(address.begin(), address.end()).c_str(), &server.sin_addr.s_addr);
+	#else
+		InetPton(AF_INET, address.c_str(), &server.sin_addr.s_addr);
+	#endif
 #else
 		server.sin_addr.s_addr = inet_addr(address.c_str());
 #endif
@@ -266,7 +270,7 @@ private:
 	 * @param id The ID of the request.
 	 * @param type The type of packet.
 	 *
-	 * @returns an std::vector<char>
+	 * @returns The packet data (as an array of chars) to send to a server.
 	 */
 	std::vector<char> form_packet(const std::string_view data, int32_t id, int32_t type) {
 		const int32_t data_size = static_cast<int32_t>(data.size()) + MIN_PACKET_SIZE;
