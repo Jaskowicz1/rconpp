@@ -27,7 +27,7 @@ This library was originally made and tested on these operating systems and will 
 
 ### Windows
 
-Windows is not currently supported but is planned.
+Windows support has been added but is still under heavy testing.
 
 # Getting Started
 
