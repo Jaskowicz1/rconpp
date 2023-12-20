@@ -32,7 +32,7 @@ We do not test support for MinGW, nor do we want to actively try and support it.
 
 # Getting Started
 
-For now, rcon++ can only be used by adding the header and cpp file into your source code.
+For now, rcon++ can only be used by adding the header file into your source code.
 
 From there you can easily start an RCON connection, and do a command, like the following:
 
