@@ -87,6 +87,11 @@ public:
 	 */
 	rcon(const std::string_view addr, const unsigned int _port, const std::string_view pass) : address(addr), port(_port), password(pass) {
 
+		if(_port > 65535) {
+			std::cout << "Invalid port! The port can't exceed 65535!" << "\n";
+			return;
+		}
+
 		std::cout << "Attempting connection to RCON server..." << "\n";
 
 		if (!connect_to_server()) {
@@ -325,11 +330,13 @@ private:
 				}
 			}
 
-			int offset = packet.bytes - MIN_PACKET_LENGTH + 3;
+			// Offset is the entire data packet, excluding the 1 byte for the null terminated chars.
+			int offset = packet.bytes - (MIN_PACKET_LENGTH + 3);
 
 			if (offset == -1)
 				continue;
 
+			// Start from 8 here because we don't need to care for the ID nor type (ID will be 0-3, type will be 4-7).
 			std::string part(&packet.data[8], &packet.data[8] + offset);
 
 			if (byte32_to_int(packet.data) == id) {
