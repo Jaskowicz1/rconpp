@@ -1,16 +1,16 @@
-# rconpp
+# rcon++
 Rcon++ is a modern Source RCON library for C++, allowing people to easily use RCON however they like!
 
 #### Library Features
 
 - Support for Valve and non-Valve games.
 - Non-blocking and blocking calls.
+- Header-Only (all in one file)!
 
 #### To-do
 
 - Support for hosting an RCON server.
 - Support for multiple response packets.
-- Make the project header-Only (all in one file).
 
 #### Library Usage
 
@@ -23,24 +23,25 @@ If you're using this library, feel free to message me and show me, you might jus
 
 ### Linux and Unix
 
-This library was originally made and tested on these operating systems and will work perfectly on these!
+This library was originally made and tested on Linux & UNIX (more specifically OSX) and will work perfectly on these!
 
 ### Windows
 
-Windows support has been added but is still under heavy testing.
+Windows is fully supported and tested! We natively support MSVC and clang-cl, but not MinGW.
+We do not test support for MinGW, nor do we want to actively try and support it. You can try MinGW at your own risk.
 
 # Getting Started
 
-Rcon++ can only be used by adding the header and cpp file into your source code.
+For now, rcon++ can only be used by adding the header and cpp file into your source code.
 
-From there you can easily start an RCON connection with the following:
+From there you can easily start an RCON connection, and do a command, like the following:
 
 ```c++
 #include <iostream>
-#include <rcon.h>
+#include "rcon.h"
 
 int main() {
-        rcon::rcon rcon_client(127.0.0.1, 27015, changeme);
+        rcon::rcon rcon_client("127.0.0.1", 27015, "changeme");
         rcon_client.send_data("Hello!", 3, data_type::SERVERDATA_EXECCOMMAND, [](const rcon_response& response) {
                 std::cout << "response: " << response.data << "\n";
         });
