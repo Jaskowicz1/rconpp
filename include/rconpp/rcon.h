@@ -77,7 +77,7 @@ class rcon {
 
 	std::thread queue_runner;
 
-	public:
+public:
 
 	/**
 	 * @brief rcon constuctor. Initiates a connection to an RCON server with the parameters given.
@@ -193,7 +193,7 @@ class rcon {
 		return receive_information(id, type);
 	}
 
-	private:
+private:
 
 	/**
 	 * @brief Connects to RCON using `address`, `port`, and `password`.
@@ -231,7 +231,7 @@ class rcon {
 		struct sockaddr_in server {};
 		server.sin_family = AF_INET;
 #ifdef _WIN32
-		#ifdef UNICODE
+	#ifdef UNICODE
 		InetPton(AF_INET, std::wstring(address.begin(), address.end()).c_str(), &server.sin_addr.s_addr);
 	#else
 		InetPton(AF_INET, address.c_str(), &server.sin_addr.s_addr);
