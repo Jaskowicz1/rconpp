@@ -2,6 +2,8 @@
 
 #ifdef _WIN32
 #include <winsock2.h>
+#include <WS2tcpip.h>
+#pragma comment(lib, "Ws2_32.lib")
 #else
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -62,16 +64,18 @@ struct queued_request {
 
 class rcon {
 	const std::string address;
-	const unsigned int port{0};
+	const unsigned int port{ 0 };
 	const std::string password;
 #ifdef _WIN32
-	SOCKET sock{INVALID_SOCKET};
+	SOCKET sock{ INVALID_SOCKET };
 #else
 	int sock{ 0 };
 #endif
-	bool connected{false};
+	bool connected{ false };
 
 	std::vector<queued_request> requests_queued{};
+
+	std::thread queue_runner;
 
 public:
 
@@ -85,7 +89,7 @@ public:
 
 		std::cout << "Attempting connection to RCON server..." << "\n";
 
-		if (!connect()) {
+		if (!connect_to_server()) {
 			std::cout << "RCON is aborting as it failed to initiate." << "\n";
 			return;
 		}
@@ -104,7 +108,7 @@ public:
 
 		connected = true;
 
-		std::thread queue_runner([this]() {
+		queue_runner = std::thread([this]() {
 			while (connected) {
 				if (requests_queued.empty()) {
 					continue;
@@ -126,12 +130,19 @@ public:
 	};
 
 	~rcon() {
+		// Set connected to false, meaning no requests can be attempted during shutdown.
+		connected = false;
+
 #ifdef _WIN32
 		closesocket(sock);
 		WSACleanup();
 #else
 		close(sock);
 #endif
+		// Join the queue runner (if allowed), meaning we await its end before killing this object, preventing any corruption.
+		if (queue_runner.joinable()) {
+			queue_runner.join();
+		}
 	}
 
 	/**
@@ -144,7 +155,7 @@ public:
 	 * @warning If you are expecting no response from the server, do NOT use the callback. You will halt the RCON process until the next received message (which will chain).
 	 */
 	void send_data(const std::string_view data, const int32_t id, data_type type, std::function<void(const response& retrieved_data)> callback = {}) {
-		requests_queued.emplace_back(queued_request{std::string{data}, id, type, std::move(callback)});
+		requests_queued.emplace_back(queued_request{ std::string{data}, id, type, std::move(callback) });
 	}
 
 	/**
@@ -168,11 +179,9 @@ public:
 		std::vector<char> formed_packet = form_packet(data, id, type);
 
 		if (send(sock, formed_packet.data(), formed_packet.size(), 0) < 0) {
-			std::cout << "Sending failed! Trying again..." << "\n";
-			//if (send(sock, formed_packet.data(), formed_packet.size(), 0) < 0) {
-			//	std::cout << "Sending failed again!" << "\n";
+			std::cout << "Sending failed!" << "\n";
+			report_error();
 			return { "", false };
-			//}
 		}
 
 		if (!feedback) {
@@ -184,7 +193,7 @@ public:
 		return receive_information(id, type);
 	}
 
-	private:
+private:
 
 	/**
 	 * @brief Connects to RCON using `address`, `port`, and `password`.
@@ -193,7 +202,18 @@ public:
 	 * @warning This should only ever be called by the constructor.
 	 * The constructor calls this function once it has filled in the required data and proceeds to login.
 	 */
-	bool connect() {
+	bool connect_to_server() {
+
+#ifdef _WIN32
+		// Initialize Winsock
+		WSADATA wsa_data;
+		int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+		if (result != 0) {
+			std::cout << "WSAStartup failed. Error: " << result << std::endl;
+			return false;
+		}
+#endif
+
 		// Create new TCP socket.
 		sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
@@ -203,28 +223,34 @@ public:
 		if (sock == -1) {
 #endif
 			std::cout << "Failed to open socket." << "\n";
+			report_error();
 			return false;
 		}
 
 		// Setup port, address, and family.
-		struct sockaddr_in server{};
+		struct sockaddr_in server {};
 		server.sin_family = AF_INET;
+#ifdef _WIN32
+		InetPton(AF_INET, std::wstring(address.begin(), address.end()).c_str(), &server.sin_addr.s_addr);
+#else
 		server.sin_addr.s_addr = inet_addr(address.c_str());
+#endif
 		server.sin_port = htons(port);
 
+#ifdef _WIN32
+		int corrected_timeout = DEFAULT_TIMEOUT * 1000;
+		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&corrected_timeout, sizeof(corrected_timeout));
+#else
 		// Set a timeout of 4 seconds.
 		struct timeval tv {};
 		tv.tv_sec = DEFAULT_TIMEOUT;
 		tv.tv_usec = 0;
 
-#ifdef _WIN32
-		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*) &DEFAULT_TIMEOUT, sizeof(4));
-#else
 		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 #endif
 
 		// Connect to the socket and set the status of the connection.
-		int status = ::connect(sock, (struct sockaddr*)&server, sizeof(server));
+		int status = connect(sock, (struct sockaddr*)&server, sizeof(server));
 
 		if (status == -1) {
 			return false;
@@ -343,14 +369,24 @@ public:
 		 */
 		if (recv(sock, buffer.data(), 4, 0) == -1) {
 			std::cout << "Did not receive a packet in time. Did the server send a response?" << "\n";
+			report_error();
 			return -1;
 		}
+
 		return byte32_to_int(buffer);
 	}
 
 	inline int byte32_to_int(const std::vector<char>& buffer) {
 		// This does heavily assume little endian.
 		return static_cast<int>(buffer[0] | buffer[1] << 8 | buffer[2] << 16 | buffer[3] << 24);
+	}
+
+	void report_error() {
+#ifdef _WIN32
+		std::cout << "Error code: " << WSAGetLastError() << "\n";
+#else
+		std::cout << "Error code: " << errno << "\n";
+#endif
 	}
 };
 
