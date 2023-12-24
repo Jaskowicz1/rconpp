@@ -41,8 +41,8 @@ From there you can easily start an RCON connection, and do a command, like the f
 #include "rcon.h"
 
 int main() {
-        rcon::rcon rcon_client("127.0.0.1", 27015, "changeme");
-        rcon_client.send_data("Hello!", 3, data_type::SERVERDATA_EXECCOMMAND, [](const rcon_response& response) {
+        rcon::rcon_client client("127.0.0.1", 27015, "changeme");
+        client.send_data("Hello!", 3, data_type::SERVERDATA_EXECCOMMAND, [](const rcon_response& response) {
                 std::cout << "response: " << response.data << "\n";
         });
         
