@@ -131,28 +131,32 @@ public:
 
 class rcon_client {
 	const std::string address{};
-	const uint16_t port{0};
+	const int port{0};
 	const std::string password{};
 #ifdef _WIN32
 	SOCKET sock{INVALID_SOCKET};
 #else
 	int sock{0};
 #endif
-	bool connected{false};
 
 	std::vector<queued_request> requests_queued{};
 
 	std::thread queue_runner;
 
 public:
+	bool connected{false};
 
 	/**
 	 * @brief rcon constuctor. Initiates a connection to an RCON server with the parameters given.
 	 *
+	 * @param addr The IP Address (NOT domain) to connect to.
+	 * @param _port The port to connect to.
+	 * @param pass The password for the RCON server you are connecting to.
+	 *
 	 * @note This is a blocking call (done on purpose). It needs to wait to connect to the RCON server before anything else happens.
 	 * It will timeout after 4 seconds if it can't connect.
 	 */
-	rcon_client(const std::string_view addr, const uint16_t _port, const std::string_view pass) : address(addr), port(_port), password(pass) {
+	rcon_client(const std::string_view addr, const int _port, const std::string_view pass) : address(addr), port(_port), password(pass) {
 
 		if(_port > 65535) {
 			std::cout << "Invalid port! The port can't exceed 65535!" << "\n";
@@ -223,6 +227,7 @@ public:
 	 * @param data Data to send to the server.
 	 * @param id ID of the packet. Try to make sure you aren't sending multiple requests, at the same time, with the same ID as it may cause issues.
 	 * @param type The type of packet to send.
+	 * @param callback The callback function that will fire when the data is returned.
 	 *
 	 * @warning If you are expecting no response from the server, do NOT use the callback. You will halt the RCON process until the next received message (which will chain).
 	 */

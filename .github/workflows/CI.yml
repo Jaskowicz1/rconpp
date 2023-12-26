@@ -26,17 +26,18 @@ jobs:
       fail-fast: false # Don't fail everything if one fails. We want to test each OS/Compiler individually
       matrix:
         cfg:
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: clang-10, cpp-version: clang++-10}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-11, cpp-version: clang++-11}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-12, cpp-version: clang++-12}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-13, cpp-version: clang++-13}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-14, cpp-version: clang++-14}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-15, cpp-version: clang++-15}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-9, cpp-version: g++-9}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-10, cpp-version: g++-10}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-11, cpp-version: g++-11}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-12, cpp-version: g++-12}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: g++-13, cpp-version: g++-13}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: clang-10, cpp-version: clang++-10, ctest: 'no', downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-11, cpp-version: clang++-11, ctest: 'no', downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-12, cpp-version: clang++-12, ctest: 'no', downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-13, cpp-version: clang++-13, ctest: 'no', downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-14, cpp-version: clang++-14, ctest: 'no', downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-15, cpp-version: clang++-15, ctest: 'no', downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: g++-8, cpp-version: g++-8, ctest: 'yes', downloadcpp: 'no'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: g++-9, cpp-version: g++-9, ctest: 'no', downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-10, cpp-version: g++-10, ctest: 'no', downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-11, cpp-version: g++-11, ctest: 'no', downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-12, cpp-version: g++-12, ctest: 'no', downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-13, cpp-version: g++-13, ctest: 'no', downloadcpp: 'yes'}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@eb238b55efaa70779f274895e782ed17c84f2895 # v2.6.1
@@ -47,7 +48,11 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Install apt packages
-        run: sudo sed -i 's/azure\.//' /etc/apt/sources.list && sudo apt update && sudo apt-get install -y ${{ matrix.cfg.package }} pkg-config
+        run: sudo sed -i 's/azure\.//' /etc/apt/sources.list && sudo apt update && sudo apt-get install -y pkg-config
+
+      - name: Install C++ apt package
+        if: ${{ matrix.cfg.downloadcpp == 'yes' }}
+        run: sudo apt-get install -y ${{ matrix.cfg.package }}
 
       - name: Generate CMake
         run: cmake -B build
@@ -56,6 +61,14 @@ jobs:
 
       - name: Build Project
         run: cmake --build build -j${{ matrix.cfg.concurrency }}
+
+      - name: Run unit tests
+        if: ${{ matrix.cfg.ctest == 'yes' }}
+        run: cd build && ctest -VV
+        env:
+          RCON_TESTING_IP: ${{secrets.RCON_TESTING_IP}}
+          RCON_TESTING_PORT: ${{secrets.RCON_TESTING_PORT}}
+          RCON_TESTING_PASSWORD: ${{secrets.RCON_TESTING_PASSWORD}}
 
       #- name: Package distributable
       #  if: ${{ matrix.cfg.cpack == 'yes' }}
