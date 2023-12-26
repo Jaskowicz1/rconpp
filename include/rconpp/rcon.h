@@ -372,9 +372,13 @@ private:
 				}
 			}
 
-			std::string part(&packet_response.data[8], &packet_response.data[packet_response.size+1]);
-
 			if (packet_type == id) {
+				std::string part{};
+
+				if(packet_response.size > 10) {
+					part = std::string(&packet_response.data[8], &packet_response.data[packet_response.data.size()-1]);
+				}
+
 				return { part, packet_response.server_responded };
 			}
 		}
@@ -387,23 +391,23 @@ private:
 	 * @return A packet structure containing the length, size, data, and if server responded.
 	 */
 	packet read_packet() {
-		size_t packet_length = read_packet_length();
+		size_t packet_size = read_packet_size();
 
 		packet temp_packet{};
-		temp_packet.length = packet_length;
+		temp_packet.length = packet_size + 4;
 
-		if(packet_length > 0) {
-			temp_packet.size = packet_length - 4;
+		if(packet_size > 0) {
+			temp_packet.size = packet_size;
 		}
 
 		/*
-		 * If the packet length is -1, the server didn't respond.
-		 * If the packet length is 0, the server did respond but said nothing.
+		 * If the packet size is -1, the server didn't respond.
+		 * If the packet size is 0, the server did respond but said nothing.
 		 */
-		if (packet_length == -1) {
+		if (packet_size == -1) {
 			return temp_packet;
 		}
-		else if (packet_length == 0) {
+		else if (packet_size == 0) {
 			temp_packet.server_responded = true;
 			return temp_packet;
 		}
@@ -411,22 +415,25 @@ private:
 		temp_packet.server_responded = true;
 
 		std::vector<char> buffer{};
-		buffer.resize(packet_length);
+		buffer.resize(temp_packet.length);
 
-		// Whilst we do technically read 4 more bytes than needed here, it's completely safe to do this.
-		recv(sock, buffer.data(), packet_length, 0);
+		/*
+		 * Receiving by the length of the packet will give us 4 extra bytes, so, we do by size here.
+		 * This is because read_packet_size() reads the first 4 bytes and discards them.
+		 */
+		recv(sock, buffer.data(), temp_packet.size, 0);
 
 		temp_packet.data = buffer;
 
 		return temp_packet;
 	}
 
-	int read_packet_length() {
+	int read_packet_size() {
 		std::vector<char> buffer{};
 		buffer.resize(4);
 
 		/*
-		 * RCON gives the packet LENGTH in the first four (4) bytes of each packet.
+		 * RCON gives the packet SIZE in the first four (4) bytes of each packet.
 		 * We simply just want to read that and then return it.
 		 */
 		if (recv(sock, buffer.data(), 4, 0) == -1) {

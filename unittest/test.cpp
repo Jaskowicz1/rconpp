@@ -8,8 +8,6 @@ int main() {
 	rconpp::rcon_client client(std::getenv("RCON_TESTING_IP"), std::stoi(std::getenv("RCON_TESTING_PORT")), std::getenv("RCON_TESTING_PASSWORD"));
 
 	if(client.connected) {
-		std::cout << "Hello!" << "\n";
-
 		rconpp::response res = client.send_data_sync("testing", 3, rconpp::data_type::SERVERDATA_EXECCOMMAND);
 
 		if(res.server_responded) {
