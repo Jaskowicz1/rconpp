@@ -9,10 +9,6 @@ project(rconpp
 	DESCRIPTION "A modern Source-RCON library for C++"
 )
 
-if (DPP_BUILD_TEST)
-	enable_testing(${CMAKE_CURRENT_SOURCE_DIR})
-endif()
-
 include(GNUInstallDirs)
 
 add_library(rconpp INTERFACE)
@@ -33,8 +29,8 @@ endif()
 if(BUILD_TESTS)
 	add_executable(unittest "unittest/test.cpp")
 	target_compile_features(unittest PRIVATE cxx_std_17)
-	target_link_directories(unittest PUBLIC rconpp)
-
+	target_link_directories(unittest PRIVATE rconpp)
+	enable_testing()
 	add_test(
 		NAME unittest
 		COMMAND unittest
