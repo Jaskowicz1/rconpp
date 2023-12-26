@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
+option(BUILD_TESTS "Build the test program" ON)
+
 project(rconpp
 	VERSION 0.1.0
 	LANGUAGES CXX
@@ -19,3 +21,18 @@ set_target_properties(rconpp PROPERTIES
 	POSITION_INDEPENDENT_CODE true
 	LINKER_LANGUAGE CXX
 )
+
+if(NOT MSVC)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+endif()
+
+if(BUILD_TESTS)
+	add_executable(unittest "unittest/test.cpp")
+	target_compile_features(unittest PRIVATE cxx_std_17)
+	target_link_directories(unittest PRIVATE rconpp)
+	enable_testing()
+	add_test(
+		NAME unittest
+		COMMAND unittest
+	)
+endif()

@@ -131,28 +131,32 @@ public:
 
 class rcon_client {
 	const std::string address{};
-	const uint16_t port{0};
+	const int port{0};
 	const std::string password{};
 #ifdef _WIN32
 	SOCKET sock{INVALID_SOCKET};
 #else
 	int sock{0};
 #endif
-	bool connected{false};
 
 	std::vector<queued_request> requests_queued{};
 
 	std::thread queue_runner;
 
 public:
+	bool connected{false};
 
 	/**
 	 * @brief rcon constuctor. Initiates a connection to an RCON server with the parameters given.
 	 *
+	 * @param addr The IP Address (NOT domain) to connect to.
+	 * @param _port The port to connect to.
+	 * @param pass The password for the RCON server you are connecting to.
+	 *
 	 * @note This is a blocking call (done on purpose). It needs to wait to connect to the RCON server before anything else happens.
 	 * It will timeout after 4 seconds if it can't connect.
 	 */
-	rcon_client(const std::string_view addr, const uint16_t _port, const std::string_view pass) : address(addr), port(_port), password(pass) {
+	rcon_client(const std::string_view addr, const int _port, const std::string_view pass) : address(addr), port(_port), password(pass) {
 
 		if(_port > 65535) {
 			std::cout << "Invalid port! The port can't exceed 65535!" << "\n";
@@ -223,6 +227,7 @@ public:
 	 * @param data Data to send to the server.
 	 * @param id ID of the packet. Try to make sure you aren't sending multiple requests, at the same time, with the same ID as it may cause issues.
 	 * @param type The type of packet to send.
+	 * @param callback The callback function that will fire when the data is returned.
 	 *
 	 * @warning If you are expecting no response from the server, do NOT use the callback. You will halt the RCON process until the next received message (which will chain).
 	 */
@@ -367,9 +372,13 @@ private:
 				}
 			}
 
-			std::string part(&packet_response.data[8], &packet_response.data[packet_response.size+1]);
-
 			if (packet_type == id) {
+				std::string part{};
+
+				if(packet_response.size > 10) {
+					part = std::string(&packet_response.data[8], &packet_response.data[packet_response.data.size()-1]);
+				}
+
 				return { part, packet_response.server_responded };
 			}
 		}
@@ -382,23 +391,23 @@ private:
 	 * @return A packet structure containing the length, size, data, and if server responded.
 	 */
 	packet read_packet() {
-		size_t packet_length = read_packet_length();
+		size_t packet_size = read_packet_size();
 
 		packet temp_packet{};
-		temp_packet.length = packet_length;
+		temp_packet.length = packet_size + 4;
 
-		if(packet_length > 0) {
-			temp_packet.size = packet_length - 4;
+		if(packet_size > 0) {
+			temp_packet.size = packet_size;
 		}
 
 		/*
-		 * If the packet length is -1, the server didn't respond.
-		 * If the packet length is 0, the server did respond but said nothing.
+		 * If the packet size is -1, the server didn't respond.
+		 * If the packet size is 0, the server did respond but said nothing.
 		 */
-		if (packet_length == -1) {
+		if (packet_size == -1) {
 			return temp_packet;
 		}
-		else if (packet_length == 0) {
+		else if (packet_size == 0) {
 			temp_packet.server_responded = true;
 			return temp_packet;
 		}
@@ -406,22 +415,25 @@ private:
 		temp_packet.server_responded = true;
 
 		std::vector<char> buffer{};
-		buffer.resize(packet_length);
+		buffer.resize(temp_packet.length);
 
-		// Whilst we do technically read 4 more bytes than needed here, it's completely safe to do this.
-		recv(sock, buffer.data(), packet_length, 0);
+		/*
+		 * Receiving by the length of the packet will give us 4 extra bytes, so, we do by size here.
+		 * This is because read_packet_size() reads the first 4 bytes and discards them.
+		 */
+		recv(sock, buffer.data(), temp_packet.size, 0);
 
 		temp_packet.data = buffer;
 
 		return temp_packet;
 	}
 
-	int read_packet_length() {
+	int read_packet_size() {
 		std::vector<char> buffer{};
 		buffer.resize(4);
 
 		/*
-		 * RCON gives the packet LENGTH in the first four (4) bytes of each packet.
+		 * RCON gives the packet SIZE in the first four (4) bytes of each packet.
 		 * We simply just want to read that and then return it.
 		 */
 		if (recv(sock, buffer.data(), 4, 0) == -1) {
