@@ -32,8 +32,7 @@ jobs:
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-13, cpp-version: clang++-13, ctest: 'no', downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-14, cpp-version: clang++-14, ctest: 'no', downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-15, cpp-version: clang++-15, ctest: 'no', downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: g++-8, cpp-version: g++-8, ctest: 'yes', downloadcpp: 'no'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: g++-9, cpp-version: g++-9, ctest: 'no', downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: g++-9, cpp-version: g++-9, ctest: 'yes', downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-10, cpp-version: g++-10, ctest: 'no', downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-11, cpp-version: g++-11, ctest: 'no', downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-12, cpp-version: g++-12, ctest: 'no', downloadcpp: 'yes'}
