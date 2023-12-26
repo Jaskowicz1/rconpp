@@ -154,6 +154,11 @@ public:
 	 */
 	rcon_client(const std::string_view addr, const uint16_t _port, const std::string_view pass) : address(addr), port(_port), password(pass) {
 
+		if(_port > 65535) {
+			std::cout << "Invalid port! The port can't exceed 65535!" << "\n";
+			return;
+		}
+
 		std::cout << "Attempting connection to RCON server..." << "\n";
 
 		if (!connect_to_server()) {
