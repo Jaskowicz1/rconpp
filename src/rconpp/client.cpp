@@ -1,0 +1,244 @@
+#include "client.h"
+#include "utilities.h"
+
+rconpp::rcon_client::rcon_client(const std::string_view addr, const int _port, const std::string_view pass) : address(addr), port(_port), password(pass) {
+
+	if(_port > 65535) {
+		std::cout << "Invalid port! The port can't exceed 65535!" << "\n";
+		return;
+	}
+
+	std::cout << "Attempting connection to RCON server..." << "\n";
+
+	if (!connect_to_server()) {
+		std::cout << "RCON is aborting as it failed to initiate." << "\n";
+		return;
+	}
+
+	std::cout << "Connected successfully! Sending login data..." << "\n";
+
+	// The server will send SERVERDATA_AUTH_RESPONSE once it's happy. If it's not -1, the server will have accepted us!
+	response response = send_data_sync(pass, 1, data_type::SERVERDATA_AUTH, true);
+
+	if (!response.server_responded) {
+		std::cout << "Login data was incorrect. RCON will now abort." << "\n";
+		return;
+	}
+
+	std::cout << "Sent login data." << "\n";
+
+	connected = true;
+
+	queue_runner = std::thread([this]() {
+		while (connected) {
+			if (requests_queued.empty()) {
+				continue;
+			}
+
+			for (const queued_request& request : requests_queued) {
+				// Send data to callback if it's been set.
+				if (request.callback)
+					request.callback(send_data_sync(request.data, request.id, request.type));
+				else
+					send_data_sync(request.data, request.id, request.type, false);
+			}
+
+			requests_queued.clear();
+		}
+	});
+
+	queue_runner.detach();
+}
+
+rconpp::rcon_client::~rcon_client() {
+	// Set connected to false, meaning no requests can be attempted during shutdown.
+	connected = false;
+
+#ifdef _WIN32
+	closesocket(sock);
+		WSACleanup();
+#else
+	close(sock);
+#endif
+	// Join the queue runner (if allowed), meaning we await its end before killing this object, preventing any corruption.
+	if (queue_runner.joinable()) {
+		queue_runner.join();
+	}
+}
+
+rconpp::response rconpp::rcon_client::send_data_sync(const std::string_view data, const int32_t id, rconpp::data_type type, bool feedback) {
+	if (!connected && type != data_type::SERVERDATA_AUTH) {
+		std::cout << "Cannot send data when not connected." << "\n";
+		return { "", false };
+	}
+
+	packet formed_packet = form_packet(data, id, type);
+
+	if (send(sock, formed_packet.data.data(), formed_packet.length, 0) < 0) {
+		std::cout << "Sending failed!" << "\n";
+		report_error();
+		return { "", false };
+	}
+
+	if (!feedback) {
+		// Because we do not want any feedback, we just send no data and say the server didn't respond.
+		return { "", false };
+	}
+
+	// Server will send a SERVERDATA_RESPONSE_VALUE packet.
+	return receive_information(id, type);
+}
+
+bool rconpp::rcon_client::connect_to_server() {
+#ifdef _WIN32
+	// Initialize Winsock
+		WSADATA wsa_data;
+		int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+		if (result != 0) {
+			std::cout << "WSAStartup failed. Error: " << result << std::endl;
+			return false;
+		}
+#endif
+
+	// Create new TCP socket.
+	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+#ifdef _WIN32
+	if (sock == INVALID_SOCKET) {
+#else
+	if (sock == -1) {
+#endif
+		std::cout << "Failed to open socket." << "\n";
+		report_error();
+		return false;
+	}
+
+	// Setup port, address, and family.
+	struct sockaddr_in server {};
+	server.sin_family = AF_INET;
+#ifdef _WIN32
+	#ifdef UNICODE
+		InetPton(AF_INET, std::wstring(address.begin(), address.end()).c_str(), &server.sin_addr.s_addr);
+	#else
+		InetPton(AF_INET, address.c_str(), &server.sin_addr.s_addr);
+	#endif
+#else
+	server.sin_addr.s_addr = inet_addr(address.c_str());
+#endif
+	server.sin_port = htons(port);
+
+#ifdef _WIN32
+	int corrected_timeout = DEFAULT_TIMEOUT * 1000;
+		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&corrected_timeout, sizeof(corrected_timeout));
+#else
+	// Set a timeout of 4 seconds.
+	struct timeval tv {};
+	tv.tv_sec = DEFAULT_TIMEOUT;
+	tv.tv_usec = 0;
+
+	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+#endif
+
+	// Connect to the socket and set the status of the connection.
+	int status = connect(sock, (struct sockaddr*)&server, sizeof(server));
+
+	if (status == -1) {
+		return false;
+	}
+
+	return true;
+}
+
+rconpp::response rconpp::rcon_client::receive_information(int32_t id, rconpp::data_type type) {
+	// Whilst this loop is better than a while loop,
+	// it should really just keep going for a certain amount of seconds.
+	for (int i = 0; i < 500; i++) {
+		packet packet_response = read_packet();
+
+		int packet_type = bit32_to_int(packet_response.data);
+
+		if (packet_response.length == 0) {
+			if (packet_type != SERVERDATA_AUTH)
+				return { "", packet_response.server_responded };
+			else
+				continue;
+		}
+
+		if (type == SERVERDATA_AUTH) {
+			if (packet_type == -1) {
+				return { "", false };
+			} else {
+				if (packet_type == id) {
+					return { "", true };
+				}
+			}
+		}
+
+		if (packet_type == id) {
+			std::string part{};
+
+			if(packet_response.size > 10) {
+				part = std::string(&packet_response.data[8], &packet_response.data[packet_response.data.size()-1]);
+			}
+
+			return { part, packet_response.server_responded };
+		}
+	}
+
+	return { "", false };
+}
+
+rconpp::packet rconpp::rcon_client::read_packet() {
+	size_t packet_size = read_packet_size();
+
+	packet temp_packet{};
+	temp_packet.length = packet_size + 4;
+
+	if(packet_size > 0) {
+		temp_packet.size = packet_size;
+	}
+
+	/*
+	 * If the packet size is -1, the server didn't respond.
+	 * If the packet size is 0, the server did respond but said nothing.
+	 */
+	if (packet_size == -1) {
+		return temp_packet;
+	}
+	else if (packet_size == 0) {
+		temp_packet.server_responded = true;
+		return temp_packet;
+	}
+
+	temp_packet.server_responded = true;
+
+	std::vector<char> buffer{};
+	buffer.resize(temp_packet.length);
+
+	/*
+	 * Receiving by the length of the packet will give us 4 extra bytes, so, we do by size here.
+	 * This is because read_packet_size() reads the first 4 bytes and discards them.
+	 */
+	recv(sock, buffer.data(), temp_packet.size, 0);
+
+	temp_packet.data = buffer;
+
+	return temp_packet;
+}
+
+int rconpp::rcon_client::read_packet_size() {
+	std::vector<char> buffer{};
+	buffer.resize(4);
+
+	/*
+	 * RCON gives the packet SIZE in the first four (4) bytes of each packet.
+	 * We simply just want to read that and then return it.
+	 */
+	if (recv(sock, buffer.data(), 4, 0) == -1) {
+		std::cout << "Did not receive a packet in time. Did the server send a response?" << "\n";
+		report_error();
+		return -1;
+	}
+
+	return bit32_to_int(buffer);
+};
