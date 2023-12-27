@@ -1,5 +1,8 @@
 #include "utilities.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
 #include <cstring>
 
 rconpp::packet rconpp::form_packet(const std::string_view data, int32_t id, int32_t type) {
