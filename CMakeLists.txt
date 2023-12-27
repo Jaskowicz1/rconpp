@@ -37,6 +37,10 @@ set_target_properties(rconpp PROPERTIES
 	POSITION_INDEPENDENT_CODE true
 )
 
+target_compile_features(rconpp PRIVATE cxx_std_17)
+target_compile_features(rconpp PRIVATE cxx_constexpr)
+target_compile_features(rconpp PRIVATE cxx_lambdas)
+
 if(BUILD_TESTS)
 	add_executable(unittest "unittest/test.cpp")
 	target_compile_features(unittest PRIVATE cxx_std_17)
