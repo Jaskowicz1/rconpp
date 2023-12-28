@@ -26,17 +26,17 @@ jobs:
       fail-fast: false # Don't fail everything if one fails. We want to test each OS/Compiler individually
       matrix:
         cfg:
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: clang-10, cpp-version: clang++-10, ctest: 'no', downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-11, cpp-version: clang++-11, ctest: 'no', downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-12, cpp-version: clang++-12, ctest: 'no', downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-13, cpp-version: clang++-13, ctest: 'no', downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-14, cpp-version: clang++-14, ctest: 'no', downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-15, cpp-version: clang++-15, ctest: 'no', downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: g++-9, cpp-version: g++-9, ctest: 'yes', downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-10, cpp-version: g++-10, ctest: 'no', downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-11, cpp-version: g++-11, ctest: 'no', downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-12, cpp-version: g++-12, ctest: 'no', downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-13, cpp-version: g++-13, ctest: 'no', downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: clang-10, cpp-version: clang++-10, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-11, cpp-version: clang++-11, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-12, cpp-version: clang++-12, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-13, cpp-version: clang++-13, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-14, cpp-version: clang++-14, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-15, cpp-version: clang++-15, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: g++-9,    cpp-version: g++-9,      ctest: 'yes', cpack: 'no',  downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-10,   cpp-version: g++-10,     ctest: 'no',  cpack: 'yes', downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-11,   cpp-version: g++-11,     ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-12,   cpp-version: g++-12,     ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-13,   cpp-version: g++-13,     ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@eb238b55efaa70779f274895e782ed17c84f2895 # v2.6.1
@@ -69,20 +69,75 @@ jobs:
           RCON_TESTING_PORT: ${{secrets.RCON_TESTING_PORT}}
           RCON_TESTING_PASSWORD: ${{secrets.RCON_TESTING_PASSWORD}}
 
-      #- name: Package distributable
-      #  if: ${{ matrix.cfg.cpack == 'yes' }}
-      #  run: cd build && cpack --verbose
+      - name: Package distributable
+        if: ${{ matrix.cfg.cpack == 'yes' }}
+        run: cd build && cpack --verbose
 
-      #- name: Upload Binary (DEB)
-      #  if: ${{ matrix.cfg.cpack == 'yes' }}
-      #  uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
-      #  with:
-      #    name: "librconpp - Debian Package ${{matrix.cfg.arch}}"
-      #    path: '${{github.workspace}}/build/*.deb'
+      - name: Upload Binary (DEB)
+        if: ${{ matrix.cfg.cpack == 'yes' }}
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
+        with:
+          name: "librconpp - Debian Package ${{matrix.cfg.arch}}"
+          path: '${{github.workspace}}/build/*.deb'
 
-      #- name: Upload Binary (RPM)
-      #  if: ${{ matrix.cfg.cpack == 'yes' }}
-      #  uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
-      #  with:
-      #    name: "librconpp - RPM Package ${{matrix.cfg.arch}}"
-      #    path: '${{github.workspace}}/build/*.rpm'
+  windows: # Windows x64 and x86 build matrix
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false # Don't cancel other matrix jobs if one fails
+      matrix:
+        cfg:
+          - { name: 'x64',            arch: x64, config: Release, vs: '2019', os: 'windows-2019', vsv: '16', upload: true,  options: '' }
+          - { name: 'x64',            arch: x64, config: Debug,   vs: '2019', os: 'windows-2019', vsv: '16', upload: true,  options: '' }
+          - { name: 'x86',            arch: x86, config: Release, vs: '2019', os: 'windows-2019', vsv: '16', upload: true,  options: '-T host=x86 ' }
+          - { name: 'x86',            arch: x86, config: Debug,   vs: '2019', os: 'windows-2019', vsv: '16', upload: true,  options: '-T host=x86 ' }
+          - { name: 'x64',            arch: x64, config: Release, vs: '2022', os: 'windows-2022', vsv: '17', upload: true,  options: '' }
+          - { name: 'x64',            arch: x64, config: Debug,   vs: '2022', os: 'windows-2022', vsv: '17', upload: true,  options: '' }
+          - { name: 'x86',            arch: x86, config: Release, vs: '2022', os: 'windows-2022', vsv: '17', upload: true,  options: '-T host=x86' }
+          - { name: 'x86',            arch: x86, config: Debug,   vs: '2022', os: 'windows-2022', vsv: '17', upload: true,  options: '-T host=x86' }
+          - { name: 'x64-Clang',      arch: x64, config: Release, vs: '2022', os: 'windows-2022', vsv: '17', upload: false, options: '-T ClangCL' }
+          - { name: 'x64-Clang',      arch: x64, config: Debug,   vs: '2022', os: 'windows-2022', vsv: '17', upload: false, options: '-T ClangCL' }
+
+    name: "Windows ${{matrix.cfg.name}}-${{matrix.cfg.config}}-vs${{matrix.cfg.vs}}"
+    runs-on: ${{matrix.cfg.os}}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@eb238b55efaa70779f274895e782ed17c84f2895 # v2.6.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout rconpp
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          path: main
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@1ff57057b5cfdc39105cd07a01d78e9b0ea0c14c # v1.3.1
+
+      - name: Install chocolatey packages ${{ matrix.cfg.arch}}
+        uses: seanmiddleditch/gha-setup-ninja@8b297075da4cd2a5f1fd21fe011b499edf06e9d2 # master
+
+      - name: Generate CMake (x64)
+        if: ${{ matrix.cfg.arch == 'x64' }}
+        run: mkdir main/build && cd main/build && cmake -G "Visual Studio ${{matrix.cfg.vsv}} ${{matrix.cfg.vs}}" ${{matrix.cfg.options}} ..
+
+      - name: Generate CMake (x86)
+        if: ${{ matrix.cfg.arch == 'x86' }}
+        run: mkdir main/build && cd main/build && cmake -DCMAKE_TOOLCHAIN_FILE="cmake\Win32Toolchain.cmake" -G "Visual Studio ${{matrix.cfg.vsv}} ${{matrix.cfg.vs}}" -A Win32 ${{matrix.cfg.options}} ..
+
+      - name: Build Project
+        run: cmake --build main/build --target rconpp --config ${{matrix.cfg.config}} --parallel 2
+
+      - name: Move debug files for packaging
+        if: ${{ matrix.cfg.config == 'Debug' }}
+        run: xcopy main\build\Debug\* main\build\Release\ /s /q
+
+      - name: Package distributable
+        run: cd main/build && cpack --verbose
+
+      - name: Upload Binary
+        if: ${{ matrix.cfg.upload }}
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
+        with:
+          name: "librconpp - Windows ${{matrix.cfg.name}}-${{matrix.cfg.config}}-vs${{matrix.cfg.vs}}"
+          path: '${{github.workspace}}/main/build/*.zip'
