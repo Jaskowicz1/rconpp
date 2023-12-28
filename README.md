@@ -4,8 +4,7 @@ Rcon++ is a modern Source RCON library for C++, allowing people to easily use RC
 #### Library Features
 
 - Support for Valve and non-Valve games.
-- Non-blocking and blocking calls.
-- Header-Only (all in one file)!
+- Callbacks, allowing non-blocking calls.
 
 #### To-do
 
