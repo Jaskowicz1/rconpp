@@ -1,5 +1,6 @@
 #pragma once
 
+#include "export.h"
 #include <string>
 #include <string_view>
 #include <vector>
@@ -65,7 +66,7 @@ struct response {
  *
  * @returns The packet data (as an array of chars) to send to a server.
  */
-packet form_packet(const std::string_view data, int32_t id, int32_t type);
+RCONPP_EXPORT packet form_packet(const std::string_view data, int32_t id, int32_t type);
 
 /**
  * @brief Turn the first 4 bytes of a buffer (which ideally a 32 bit int) into an integer.
@@ -74,11 +75,11 @@ packet form_packet(const std::string_view data, int32_t id, int32_t type);
  *
  * @return The value of the 4 bytes.
  */
-int bit32_to_int(const std::vector<char>& buffer);
+RCONPP_EXPORT int bit32_to_int(const std::vector<char>& buffer);
 
 /**
  * @brief Reports the recent socket error.
  */
-void report_error();
+RCONPP_EXPORT void report_error();
 
 } // namespace rconpp

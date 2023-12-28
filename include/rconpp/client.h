@@ -28,7 +28,7 @@ struct queued_request {
 	std::function<void(const response& response)> callback;
 };
 
-class rcon_client {
+class RCONPP_EXPORT rcon_client {
 	const std::string address{};
 	const int port{0};
 	const std::string password{};

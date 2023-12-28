@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.10)
 option(BUILD_TESTS "Build the test program" ON)
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+add_compile_definitions(RCONPP_BUILD)
+
+set(RCONPP_ROOT_PATH ${CMAKE_CURRENT_SOURCE_DIR})
+
 project(rconpp
 	VERSION 0.5.0
 	LANGUAGES CXX
