@@ -108,15 +108,7 @@ bool rconpp::rcon_server::startup_server() {
 
 	// Setup port, address, and family.
 	server.sin_family = AF_INET;
-#ifdef _WIN32
-	#ifdef UNICODE
-		InetPton(AF_INET, std::wstring(address.begin(), address.end()).c_str(), &server.sin_addr.s_addr);
-	#else
-		InetPton(AF_INET, address.c_str(), &server.sin_addr.s_addr);
-	#endif
-#else
 	server.sin_addr.s_addr = INADDR_ANY;
-#endif
 	server.sin_port = htons(serv_info.port);
 
 	int allow = 1;
@@ -141,7 +133,12 @@ bool rconpp::rcon_server::startup_server() {
 }
 
 void rconpp::rcon_server::disconnect_client(const int client_socket) {
+
+#ifdef _WIN32
+	closesocket(client_socket);
+#else
 	close(client_socket);
+#endif
 
 	connected_clients.at(client_socket).connected = false;
 
