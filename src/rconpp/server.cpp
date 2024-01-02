@@ -83,12 +83,12 @@ rconpp::rcon_server::~rcon_server() {
 bool rconpp::rcon_server::startup_server() {
 #ifdef _WIN32
 	// Initialize Winsock
-		WSADATA wsa_data;
-		int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
-		if (result != 0) {
-			std::cout << "WSAStartup failed. Error: " << result << std::endl;
-			return false;
-		}
+	WSADATA wsa_data;
+	int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+	if (result != 0) {
+		std::cout << "WSAStartup failed. Error: " << result << std::endl;
+		return false;
+	}
 #endif
 
 	// Create new TCP socket.
@@ -119,7 +119,7 @@ bool rconpp::rcon_server::startup_server() {
 #endif
 	server.sin_port = htons(serv_info.port);
 
-	bool allow = true;
+	int allow = 1;
 	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &allow, sizeof(allow));
 	setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &allow, sizeof(allow));
 
@@ -152,7 +152,7 @@ void rconpp::rcon_server::disconnect_client(const int client_socket) {
 	}
 
 	connected_clients.erase(client_socket);
-};
+}
 
 void rconpp::rcon_server::read_packet(rconpp::connected_client client) {
 	while(client.connected) {
