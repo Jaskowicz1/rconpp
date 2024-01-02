@@ -120,9 +120,7 @@ bool rconpp::rcon_server::startup_server() {
 	server.sin_port = htons(serv_info.port);
 
 	int allow = 1;
-	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &allow, sizeof(allow));
-	setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &allow, sizeof(allow));
-
+	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&allow), sizeof(allow));
 
 	// Connect to the socket and set the status of the connection.
 	int status = bind(sock, reinterpret_cast<const sockaddr*>(&server), sizeof(server));
