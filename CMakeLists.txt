@@ -9,7 +9,7 @@ add_compile_definitions(RCONPP_BUILD)
 set(RCONPP_ROOT_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 
 project(rconpp
-	VERSION 0.5.0
+	VERSION 1.0.0
 	LANGUAGES CXX
 	HOMEPAGE_URL "https://github.com/Jaskowicz1/rconpp"
 	DESCRIPTION "A modern Source-RCON library for C++"
