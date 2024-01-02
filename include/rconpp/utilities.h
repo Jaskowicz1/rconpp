@@ -78,6 +78,15 @@ RCONPP_EXPORT packet form_packet(const std::string_view data, int32_t id, int32_
 RCONPP_EXPORT int bit32_to_int(const std::vector<char>& buffer);
 
 /**
+ * @brief Turn the second lot of 4 bytes (bytes 4-7) of a buffer (which ideally a 32 bit int) into an integer.
+ *
+ * @param buffer The bytes to turn into an integer.
+ *
+ * @return The value of the 4 bytes.
+ */
+RCONPP_EXPORT int type_to_int(const std::vector<char>& buffer);
+
+/**
  * @brief Reports the recent socket error.
  */
 RCONPP_EXPORT void report_error();

@@ -34,6 +34,10 @@ int rconpp::bit32_to_int(const std::vector<char>& buffer) {
 	return static_cast<int>(buffer[0] | buffer[1] << 8 | buffer[2] << 16 | buffer[3] << 24);
 }
 
+int rconpp::type_to_int(const std::vector<char>& buffer) {
+	return static_cast<int>(buffer[4] | buffer[5] << 8 | buffer[6] << 16 | buffer[7] << 24);
+}
+
 void rconpp::report_error() {
 #ifdef _WIN32
 	std::cout << "Error code: " << WSAGetLastError() << "\n";

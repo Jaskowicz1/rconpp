@@ -11,7 +11,7 @@ rconpp::rcon_client::rcon_client(const std::string_view addr, const int _port, c
 	std::cout << "Attempting connection to RCON server..." << "\n";
 
 	if (!connect_to_server()) {
-		std::cout << "RCON is aborting as it failed to initiate." << "\n";
+		std::cout << "RCON is aborting as it failed to initiate client." << "\n";
 		return;
 	}
 
@@ -56,7 +56,7 @@ rconpp::rcon_client::~rcon_client() {
 
 #ifdef _WIN32
 	closesocket(sock);
-		WSACleanup();
+	WSACleanup();
 #else
 	close(sock);
 #endif
@@ -129,7 +129,7 @@ bool rconpp::rcon_client::connect_to_server() {
 
 #ifdef _WIN32
 	int corrected_timeout = DEFAULT_TIMEOUT * 1000;
-		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&corrected_timeout, sizeof(corrected_timeout));
+	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&corrected_timeout, sizeof(corrected_timeout));
 #else
 	// Set a timeout of 4 seconds.
 	struct timeval tv {};
