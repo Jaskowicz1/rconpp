@@ -10,7 +10,7 @@ int main() {
 		rconpp::rcon_client client(std::getenv("RCON_TESTING_IP"), std::stoi(std::getenv("RCON_TESTING_PORT")),
 					   std::getenv("RCON_TESTING_PASSWORD"));
 
-		client.on_log = [](const std::string_view& log) {
+		client.on_log = [](const std::string_view log) {
 			std::cout << log << "\n";
 		};
 

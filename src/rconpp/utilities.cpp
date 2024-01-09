@@ -15,7 +15,7 @@ rconpp::packet rconpp::form_packet(const std::string_view data, int32_t id, int3
 
 	std::vector<char> temp_data(data_size + 4); /* Create a vector that exactly the size of the packet length. */
 
-	std::memcpy(temp_data.data(), &data_size, sizeof(data_size)); /* Copy size into it */
+	std::memcpy(temp_data.data() + 0, &data_size, sizeof(data_size)); /* Copy size into it */
 	std::memcpy(temp_data.data() + sizeof(data_size), &id, sizeof(id)); /* Copy id into it */
 	std::memcpy(temp_data.data() + sizeof(data_size) + sizeof(id), &type, sizeof(type)); /* Copy type into it */
 	std::memcpy(temp_data.data() + sizeof(data_size) + sizeof(id) + sizeof(type), data.data(), data.size()); /* Copy data into it */
