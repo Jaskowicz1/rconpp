@@ -13,14 +13,12 @@ rconpp::packet rconpp::form_packet(const std::string_view data, int32_t id, int3
 		return {};
 	}
 
-	std::vector<char> temp_data{};
+	std::vector<char> temp_data(data_size + 4); /* Create a vector that exactly the size of the packet length. */
 
-	temp_data.resize(data_size + 4); /* make sure the vector is big enough to hold all the data */
-
-	std::memcpy(temp_data.data() + 0, &data_size, sizeof(data_size)); /* copy size into it */
-	std::memcpy(temp_data.data() + sizeof(data_size), &id, sizeof(id)); /* copy id into it */
-	std::memcpy(temp_data.data() + sizeof(data_size) + sizeof(id), &type, sizeof(type)); /* copy type into it */
-	std::memcpy(temp_data.data() + sizeof(data_size) + sizeof(id) + sizeof(type), data.data(), data.size()); /* copy data into it */
+	std::memcpy(temp_data.data() + 0, &data_size, sizeof(data_size)); /* Copy size into it */
+	std::memcpy(temp_data.data() + sizeof(data_size), &id, sizeof(id)); /* Copy id into it */
+	std::memcpy(temp_data.data() + sizeof(data_size) + sizeof(id), &type, sizeof(type)); /* Copy type into it */
+	std::memcpy(temp_data.data() + sizeof(data_size) + sizeof(id) + sizeof(type), data.data(), data.size()); /* Copy data into it */
 
 	packet temp_packet;
 	temp_packet.length = data_size + 4;
