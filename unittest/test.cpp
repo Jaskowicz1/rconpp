@@ -10,6 +10,12 @@ int main() {
 		rconpp::rcon_client client(std::getenv("RCON_TESTING_IP"), std::stoi(std::getenv("RCON_TESTING_PORT")),
 					   std::getenv("RCON_TESTING_PASSWORD"));
 
+		client.on_log = [](const std::string_view& log) {
+			std::cout << log << "\n";
+		};
+
+	 	client.start(true);
+
 		if (client.connected) {
 			rconpp::response res = client.send_data_sync("testing", 3, rconpp::data_type::SERVERDATA_EXECCOMMAND);
 
@@ -22,12 +28,17 @@ int main() {
 		} else {
 			std::cout << "No connection!" << "\n";
 		}
+
 	} catch(std::exception& e) {
 		std::cout << "Client test failed. Reason: " << e.what() << "\n";
 	}
 
 	try {
 		rconpp::rcon_server server("0.0.0.0", 27015, "testing");
+
+		server.on_log = [](const std::string_view log) {
+			std::cout << log << "\n";
+		};
 
 		server.on_command = [](const rconpp::client_command& command) {
 			if (command.command == "test") {
@@ -38,6 +49,8 @@ int main() {
 				return "Hello!";
 			}
 		};
+
+		server.start(true);
 
 		std::cout << "Server test passed!" << "\n";
 	} catch(std::exception& e) {

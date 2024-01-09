@@ -1,58 +1,15 @@
+#include <mutex>
 #include "client.h"
 #include "utilities.h"
 
 rconpp::rcon_client::rcon_client(const std::string_view addr, const int _port, const std::string_view pass) : address(addr), port(_port), password(pass) {
-
-	if(_port > 65535) {
-		std::cout << "Invalid port! The port can't exceed 65535!" << "\n";
-		return;
-	}
-
-	std::cout << "Attempting connection to RCON server..." << "\n";
-
-	if (!connect_to_server()) {
-		std::cout << "RCON is aborting as it failed to initiate client." << "\n";
-		return;
-	}
-
-	std::cout << "Connected successfully! Sending login data..." << "\n";
-
-	// The server will send SERVERDATA_AUTH_RESPONSE once it's happy. If it's not -1, the server will have accepted us!
-	response response = send_data_sync(pass, 1, data_type::SERVERDATA_AUTH, true);
-
-	if (!response.server_responded) {
-		std::cout << "Login data was incorrect. RCON will now abort." << "\n";
-		return;
-	}
-
-	std::cout << "Sent login data." << "\n";
-
-	connected = true;
-
-	queue_runner = std::thread([this]() {
-		while (connected) {
-			if (requests_queued.empty()) {
-				continue;
-			}
-
-			for (const queued_request& request : requests_queued) {
-				// Send data to callback if it's been set.
-				if (request.callback)
-					request.callback(send_data_sync(request.data, request.id, request.type));
-				else
-					send_data_sync(request.data, request.id, request.type, false);
-			}
-
-			requests_queued.clear();
-		}
-	});
-
-	queue_runner.detach();
 }
 
 rconpp::rcon_client::~rcon_client() {
 	// Set connected to false, meaning no requests can be attempted during shutdown.
 	connected = false;
+
+	terminating.notify_all();
 
 #ifdef _WIN32
 	closesocket(sock);
@@ -68,14 +25,14 @@ rconpp::rcon_client::~rcon_client() {
 
 rconpp::response rconpp::rcon_client::send_data_sync(const std::string_view data, const int32_t id, rconpp::data_type type, bool feedback) {
 	if (!connected && type != data_type::SERVERDATA_AUTH) {
-		std::cout << "Cannot send data when not connected." << "\n";
+		on_log("Cannot send data when not connected.");
 		return { "", false };
 	}
 
 	packet formed_packet = form_packet(data, id, type);
 
 	if (send(sock, formed_packet.data.data(), formed_packet.length, 0) < 0) {
-		std::cout << "Sending failed!" << "\n";
+		on_log("Sending failed!");
 		report_error();
 		return { "", false };
 	}
@@ -95,7 +52,7 @@ bool rconpp::rcon_client::connect_to_server() {
 		WSADATA wsa_data;
 		int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
 		if (result != 0) {
-			std::cout << "WSAStartup failed. Error: " << result << std::endl;
+			on_log("WSAStartup failed. Error: " + std::to_string(result));
 			return false;
 		}
 #endif
@@ -108,7 +65,7 @@ bool rconpp::rcon_client::connect_to_server() {
 #else
 	if (sock == -1) {
 #endif
-		std::cout << "Failed to open socket." << "\n";
+		on_log("Failed to open socket.");
 		report_error();
 		return false;
 	}
@@ -235,10 +192,69 @@ int rconpp::rcon_client::read_packet_size() {
 	 * We simply just want to read that and then return it.
 	 */
 	if (recv(sock, buffer.data(), 4, 0) == -1) {
-		std::cout << "Did not receive a packet in time. Did the server send a response?" << "\n";
+		on_log("Did not receive a packet in time. Did the server send a response?");
 		report_error();
 		return -1;
 	}
 
 	return bit32_to_int(buffer);
+}
+
+void rconpp::rcon_client::start(bool return_after) {
+
+	auto block_calling_thread = [this]() {
+		std::mutex thread_mutex;
+		std::unique_lock thread_lock(thread_mutex);
+		this->terminating.wait(thread_lock);
+	};
+
+	if(port > 65535) {
+		on_log("Invalid port! The port can't exceed 65535!");
+		return;
+	}
+
+	on_log("Attempting connection to RCON server...");
+
+	if (!connect_to_server()) {
+		on_log("RCON is aborting as it failed to initiate client.");
+		return;
+	}
+
+	on_log("Connected successfully! Sending login data...");
+
+	// The server will send SERVERDATA_AUTH_RESPONSE once it's happy. If it's not -1, the server will have accepted us!
+	response response = send_data_sync(password, 1, data_type::SERVERDATA_AUTH, true);
+
+	if (!response.server_responded) {
+		on_log("Login data was incorrect. RCON will now abort.");
+		return;
+	}
+
+	on_log("Sent login data.");
+
+	connected = true;
+
+	queue_runner = std::thread([this]() {
+		while (connected) {
+			if (requests_queued.empty()) {
+				continue;
+			}
+
+			for (const queued_request& request : requests_queued) {
+				// Send data to callback if it's been set.
+				if (request.callback)
+					request.callback(send_data_sync(request.data, request.id, request.type));
+				else
+					send_data_sync(request.data, request.id, request.type, false);
+			}
+
+			requests_queued.clear();
+		}
+	});
+
+	queue_runner.detach();
+
+	if(!return_after) {
+		block_calling_thread();
+	}
 };

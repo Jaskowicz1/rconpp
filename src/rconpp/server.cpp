@@ -1,68 +1,16 @@
+#include <mutex>
 #include "server.h"
 
 #include "utilities.h"
 
-rconpp::rcon_server::rcon_server(const std::string_view addr, const int port, const std::string_view pass) {
-
-	if(port > 65535) {
-		std::cout << "Invalid port! The port can't exceed 65535!" << "\n";
-		return;
-	}
-
-	serv_info.address = addr;
-	serv_info.port = port;
-	serv_info.password = pass;
-
-	std::cout << "Attempting to startup an RCON server..." << "\n";
-
-	if (!startup_server()) {
-		std::cout << "RCON is aborting as it failed to initiate server." << "\n";
-		return;
-	}
-
-	online = true;
-
-	std::cout << "Server is now listening, initiating runners..." << "\n";
-
-	accept_connections_runner = std::thread([this]() {
-		while (online) {
-			connected_client client{};
-			struct sockaddr_in client_info{};
-
-			socklen_t client_len = sizeof(client_info);
-			int client_socket = accept(sock, reinterpret_cast<sockaddr*>(&client_info), &client_len);
-
-			if(client_socket == -1) {
-				std::cout << "client with socket: \"" << client_socket << "\" failed to connect." << "\n";
-				continue;
-			}
-
-			std::cout << "Client [" << inet_ntoa(client_info.sin_addr) << ":" << ntohs(client_info.sin_port) << "] has connected to the server." << "\n";
-
-			client.sock_info = client_info;
-			client.socket = client_socket;
-			client.connected = true;
-
-			std::thread client_thread([this, client]{
-				read_packet(client);
-			});
-
-			request_handlers.insert({ client_socket, std::move(client_thread) });
-
-			request_handlers.at(client_socket).detach();
-
-			connected_clients.insert({});
-		}
-	});
-
-	accept_connections_runner.detach();
-
-	std::cout << "Server is now ready!" << "\n";
+rconpp::rcon_server::rcon_server(const std::string_view addr, const int _port, const std::string_view pass) : address(addr), port(_port), password(pass) {
 }
 
 rconpp::rcon_server::~rcon_server() {
 	// Set connected to false, meaning no requests can be attempted during shutdown.
 	online = false;
+
+	terminating.notify_all();
 
 	// Safely disconnect all clients from server.
 	for(const auto& client : connected_clients) {
@@ -86,7 +34,7 @@ bool rconpp::rcon_server::startup_server() {
 	WSADATA wsa_data;
 	int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
 	if (result != 0) {
-		std::cout << "WSAStartup failed. Error: " << result << std::endl;
+		on_log("WSAStartup failed. Error: " + std::to_string(result));
 		return false;
 	}
 #endif
@@ -99,7 +47,7 @@ bool rconpp::rcon_server::startup_server() {
 #else
 	if (sock == -1) {
 #endif
-		std::cout << "Failed to open socket." << "\n";
+		on_log("Failed to open socket.");
 		report_error();
 		return false;
 	}
@@ -109,7 +57,7 @@ bool rconpp::rcon_server::startup_server() {
 	// Setup port, address, and family.
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = htons(serv_info.port);
+	server.sin_port = htons(port);
 
 	int allow = 1;
 	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&allow), sizeof(allow));
@@ -161,7 +109,7 @@ void rconpp::rcon_server::read_packet(rconpp::connected_client client) {
 		buffer.resize(packet_size);
 
 		if (recv(client.socket, buffer.data(), packet_size, 0) == -1) {
-			std::cout << "Failed to get a packet from client." << "\n";
+			on_log("Failed to get a packet from client.");
 			report_error();
 		}
 
@@ -172,7 +120,7 @@ void rconpp::rcon_server::read_packet(rconpp::connected_client client) {
 		rconpp::packet packet_to_send{};
 
 		if(!client.authenticated) {
-			if(packet_data == serv_info.password) {
+			if(packet_data == password) {
 				packet_to_send = form_packet("", id, rconpp::data_type::SERVERDATA_AUTH_RESPONSE);
 				client.authenticated = true;
 			} else {
@@ -181,9 +129,9 @@ void rconpp::rcon_server::read_packet(rconpp::connected_client client) {
 		} else {
 			if(type != rconpp::data_type::SERVERDATA_EXECCOMMAND) {
 				packet_to_send = form_packet("Invalid packet type (" + std::to_string(type) + "). Double check your packets.", id, rconpp::data_type::SERVERDATA_RESPONSE_VALUE);
-				std::cout << "Invalid packet type (" + std::to_string(type) + ") sent by [" + inet_ntoa(client.sock_info.sin_addr) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]. Double check your packets." << "\n";
+				on_log("Invalid packet type (" + std::to_string(type) + ") sent by [" + inet_ntoa(client.sock_info.sin_addr) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]. Double check your packets.");
 			} else {
-				std::cout << "Client [" << inet_ntoa(client.sock_info.sin_addr) << ":" << ntohs(client.sock_info.sin_port) << "] has asked to execute the command: \"" << packet_data << "\"" << "\n";
+				on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has asked to execute the command: \"" + packet_data + "\"");
 				if(!on_command) {
 					/*
 					 * Whilst sending information about the server not responding would be nice,
@@ -205,7 +153,7 @@ void rconpp::rcon_server::read_packet(rconpp::connected_client client) {
 		}
 
 		if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, 0) < 0) {
-			std::cout << "Sending failed!" << "\n";
+			on_log("Sending failed!");
 			report_error();
 			continue;
 		}
@@ -221,10 +169,73 @@ int rconpp::rcon_server::read_packet_size(const rconpp::connected_client client)
 	 * We simply just want to read that and then return it.
 	 */
 	if (recv(client.socket, buffer.data(), 4, 0) == -1) {
-		std::cout << "Did not receive a packet in time. Did the server send a response?" << "\n";
+		on_log("Did not receive a packet in time. Did the server send a response?");
 		report_error();
 		return -1;
 	}
 
 	return bit32_to_int(buffer);
+}
+
+void rconpp::rcon_server::start(bool return_after) {
+	auto block_calling_thread = [this]() {
+		std::mutex thread_mutex;
+		std::unique_lock thread_lock(thread_mutex);
+		this->terminating.wait(thread_lock);
+	};
+
+	if(port > 65535) {
+		on_log("Invalid port! The port can't exceed 65535!");
+		return;
+	}
+
+	on_log("Attempting to startup an RCON server...");
+
+	if (!startup_server()) {
+		on_log("RCON is aborting as it failed to initiate server.");
+		return;
+	}
+
+	online = true;
+
+	on_log("Server is now listening, initiating runners...");
+
+	accept_connections_runner = std::thread([this]() {
+		while (online) {
+			connected_client client{};
+			struct sockaddr_in client_info{};
+
+			socklen_t client_len = sizeof(client_info);
+			int client_socket = accept(sock, reinterpret_cast<sockaddr*>(&client_info), &client_len);
+
+			if(client_socket == -1) {
+				on_log("client with socket: \"" + std::to_string(client_socket) + "\" failed to connect.");
+				continue;
+			}
+
+			on_log("Client [" + std::string(inet_ntoa(client_info.sin_addr)) + ":" + std::to_string(ntohs(client_info.sin_port)) + "] has connected to the server.");
+
+			client.sock_info = client_info;
+			client.socket = client_socket;
+			client.connected = true;
+
+			std::thread client_thread([this, client]{
+				read_packet(client);
+			});
+
+			request_handlers.insert({ client_socket, std::move(client_thread) });
+
+			request_handlers.at(client_socket).detach();
+
+			connected_clients.insert({});
+		}
+	});
+
+	accept_connections_runner.detach();
+
+	on_log("Server is now ready!");
+
+	if(!return_after) {
+		block_calling_thread();
+	}
 }
