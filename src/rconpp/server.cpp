@@ -133,6 +133,8 @@ void rconpp::rcon_server::read_packet(rconpp::connected_client client) {
 			} else {
 				on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has asked to execute the command: \"" + packet_data + "\"");
 				if(!on_command) {
+					on_log("You have not set any response for on_command! The server will default to a blank response.");
+
 					/*
 					 * Whilst sending information about the server not responding would be nice,
 					 * we would end up with the possibility of clients thinking that is the response.
@@ -147,10 +149,14 @@ void rconpp::rcon_server::read_packet(rconpp::connected_client client) {
 
 					std::string text_to_send = on_command(command);
 
+					on_log("Sending reply \"" + text_to_send + "\" to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "].");
+
 					packet_to_send = form_packet(text_to_send, id, rconpp::data_type::SERVERDATA_RESPONSE_VALUE);
 				}
 			}
 		}
+
+		on_log("Sending...");
 
 		if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, 0) < 0) {
 			on_log("Sending failed!");
