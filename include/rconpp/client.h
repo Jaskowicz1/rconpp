@@ -17,6 +17,7 @@
 #include <iostream>
 #include <cstring>
 #include <thread>
+#include <condition_variable>
 #include "utilities.h"
 
 namespace rconpp {
@@ -45,8 +46,12 @@ class RCONPP_EXPORT rcon_client {
 public:
 	bool connected{false};
 
+	std::function<void(const std::string_view& log)> on_log;
+
+	std::condition_variable terminating;
+
 	/**
-	 * @brief rcon constuctor. Initiates a connection to an RCON server with the parameters given.
+	 * @brief rcon_client constuctor.
 	 *
 	 * @param addr The IP Address (NOT domain) to connect to.
 	 * @param _port The port to connect to.
@@ -58,6 +63,8 @@ public:
 	rcon_client(const std::string_view addr, const int _port, const std::string_view pass);
 
 	~rcon_client();
+
+	void start(bool return_after);
 
 	/**
 	 * @brief Send data to the connected RCON server. Requests from this function are added to a queue (`requests_queued`) and are handled by a different thread.
