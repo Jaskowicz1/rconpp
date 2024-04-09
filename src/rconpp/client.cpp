@@ -241,10 +241,6 @@ void rconpp::rcon_client::start(bool return_after) {
 			}
 
 			for (const queued_request& request : requests_queued) {
-				// If we're closing the connection down, we need to back out.
-				if(!connected)
-					return;
-
 				// Send data to callback if it's been set.
 				if (request.callback)
 					request.callback(send_data_sync(request.data, request.id, request.type));
@@ -255,8 +251,6 @@ void rconpp::rcon_client::start(bool return_after) {
 			requests_queued.clear();
 		}
 	});
-
-	queue_runner.detach();
 
 	if(!return_after) {
 		block_calling_thread();

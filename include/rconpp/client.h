@@ -16,6 +16,7 @@
 #include <vector>
 #include <iostream>
 #include <cstring>
+#include <atomic>
 #include <thread>
 #include <condition_variable>
 #include "utilities.h"
@@ -44,7 +45,7 @@ class RCONPP_EXPORT rcon_client {
 	std::thread queue_runner;
 
 public:
-	bool connected{false};
+	std::atomic<bool> connected{false};
 
 	std::function<void(const std::string_view& log)> on_log;
 
