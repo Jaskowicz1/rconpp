@@ -26,6 +26,10 @@ rconpp::rcon_server::~rcon_server() {
 	if (accept_connections_runner.joinable()) {
 		accept_connections_runner.join();
 	}
+
+	if (heartbeat_runner.joinable()) {
+		heartbeat_runner.join();
+	}
 }
 
 bool rconpp::rcon_server::startup_server() {
@@ -98,71 +102,70 @@ void rconpp::rcon_server::disconnect_client(const int client_socket) {
 }
 
 void rconpp::rcon_server::read_packet(rconpp::connected_client client) {
-	while (client.connected) {
-		const int packet_size = read_packet_size(static_cast<int>(sock), on_log);
+	const int packet_size = read_packet_size(static_cast<int>(sock), on_log);
 
-		if (packet_size <= MIN_PACKET_SIZE) {
-			continue;
-		}
+	if (packet_size <= MIN_PACKET_SIZE) {
+		return;
+	}
 
-		std::vector<char> buffer{};
-		buffer.resize(packet_size);
+	std::vector<char> buffer{};
+	buffer.resize(packet_size);
 
-		if (recv(client.socket, buffer.data(), packet_size, 0) == -1) {
-			on_log("Failed to get a packet from client.");
-			report_error();
-		}
+	if (recv(client.socket, buffer.data(), packet_size, 0) == -1) {
+		on_log("Failed to get a packet from client.");
+		report_error();
+		return;
+	}
 
-		std::string packet_data(&buffer[8], &buffer[buffer.size()-2]);
-		int id = bit32_to_int(buffer);
-		int type = type_to_int(buffer);
+	std::string packet_data(&buffer[8], &buffer[buffer.size()-2]);
+	int id = bit32_to_int(buffer);
+	int type = type_to_int(buffer);
 
-		rconpp::packet packet_to_send{};
+	rconpp::packet packet_to_send{};
 
-		if (!client.authenticated) {
-			if (packet_data == password) {
-				packet_to_send = form_packet("", id, rconpp::data_type::SERVERDATA_AUTH_RESPONSE);
-				client.authenticated = true;
-			} else {
-				packet_to_send = form_packet("", -1, rconpp::data_type::SERVERDATA_AUTH_RESPONSE);
-			}
+	if (!client.authenticated) {
+		if (packet_data == password) {
+			packet_to_send = form_packet("", id, rconpp::data_type::SERVERDATA_AUTH_RESPONSE);
+			client.authenticated = true;
 		} else {
-			if (type != rconpp::data_type::SERVERDATA_EXECCOMMAND) {
-				packet_to_send = form_packet("Invalid packet type (" + std::to_string(type) + "). Double check your packets.", id, rconpp::data_type::SERVERDATA_RESPONSE_VALUE);
-				on_log("Invalid packet type (" + std::to_string(type) + ") sent by [" + inet_ntoa(client.sock_info.sin_addr) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]. Double check your packets.");
+			packet_to_send = form_packet("", -1, rconpp::data_type::SERVERDATA_AUTH_RESPONSE);
+		}
+	} else {
+		if (type != rconpp::data_type::SERVERDATA_EXECCOMMAND) {
+			packet_to_send = form_packet("Invalid packet type (" + std::to_string(type) + "). Double check your packets.", id, rconpp::data_type::SERVERDATA_RESPONSE_VALUE);
+			on_log("Invalid packet type (" + std::to_string(type) + ") sent by [" + inet_ntoa(client.sock_info.sin_addr) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]. Double check your packets.");
+		} else {
+			on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has asked to execute the command: \"" + packet_data + "\"");
+			if (!on_command) {
+				on_log("You have not set any response for on_command! The server will default to a blank response.");
+
+				/*
+				 * Whilst sending information about the server not responding would be nice,
+				 * we would end up with the possibility of clients thinking that is the response.
+				 * It's better to just send no information and let clients assume that meant
+				 * the server didn't like the command.
+				 */
+				packet_to_send = form_packet("", id, rconpp::data_type::SERVERDATA_RESPONSE_VALUE);
 			} else {
-				on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has asked to execute the command: \"" + packet_data + "\"");
-				if (!on_command) {
-					on_log("You have not set any response for on_command! The server will default to a blank response.");
+				client_command command{};
+				command.command = packet_data;
+				command.client = client;
 
-					/*
-					 * Whilst sending information about the server not responding would be nice,
-					 * we would end up with the possibility of clients thinking that is the response.
-					 * It's better to just send no information and let clients assume that meant
-					 * the server didn't like the command.
-					 */
-					packet_to_send = form_packet("", id, rconpp::data_type::SERVERDATA_RESPONSE_VALUE);
-				} else {
-					client_command command{};
-					command.command = packet_data;
-					command.client = client;
+				std::string text_to_send = on_command(command);
 
-					std::string text_to_send = on_command(command);
+				on_log("Sending reply \"" + text_to_send + "\" to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "].");
 
-					on_log("Sending reply \"" + text_to_send + "\" to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "].");
-
-					packet_to_send = form_packet(text_to_send, id, rconpp::data_type::SERVERDATA_RESPONSE_VALUE);
-				}
+				packet_to_send = form_packet(text_to_send, id, rconpp::data_type::SERVERDATA_RESPONSE_VALUE);
 			}
 		}
+	}
 
-		on_log("Sending...");
+	on_log("Sending packet (of size: " + std::to_string(packet_to_send.length) + ") to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]");
 
-		if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, 0) < 0) {
-			on_log("Sending failed!");
-			report_error();
-			continue;
-		}
+	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, 0) < 0) {
+		on_log("Sending failed!");
+		report_error();
+		return;
 	}
 }
 
@@ -209,14 +212,34 @@ void rconpp::rcon_server::start(bool return_after) {
 			client.connected = true;
 
 			std::thread client_thread([this, client]{
-				read_packet(client);
+				while (client.connected) {
+					read_packet(client);
+
+					time_t current_time = time(nullptr);
+					if (client_socket_to_last_heartbeat.find(client.socket) == client_socket_to_last_heartbeat.end()) {
+						client_socket_to_last_heartbeat.insert({ client.socket, current_time });
+					} else {
+						time_t last_time = client_socket_to_last_heartbeat.at(client.socket);
+
+						if (current_time - last_time >= HEARTBEAT_TIME)
+						{
+							send_heartbeat(client);
+
+							// We should check if the heartbeat actually got anything, if it does then insert back into the map.
+							// if it failed, we bin that client off and shut this thread down.
+						}
+					}
+
+					// No need to let the server keep running this causing 100% usage on a thread, we can wait a bit between requests.
+					std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				}
 			});
 
 			request_handlers.insert({ client_socket, std::move(client_thread) });
 
 			request_handlers.at(client_socket).detach();
 
-			connected_clients.insert({});
+			connected_clients.insert({ client_socket, client });
 		}
 	});
 

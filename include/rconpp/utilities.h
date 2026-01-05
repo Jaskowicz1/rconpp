@@ -14,6 +14,8 @@ constexpr int DEFAULT_TIMEOUT = 4; // In Seconds.
 constexpr int MIN_PACKET_SIZE = 10;
 constexpr int MIN_PACKET_LENGTH = 14;
 constexpr int MAX_RETRIES_TO_RECEIVE_INFO = 500;
+constexpr int HEARTBEAT_TIME = 30;
+
 
 enum data_type {
 	/**

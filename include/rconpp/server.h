@@ -48,6 +48,9 @@ class RCONPP_EXPORT rcon_server {
 
 	std::thread accept_connections_runner;
 
+	// time_t is time since epoch in seconds (last time we ran).
+	std::unordered_map<int, time_t> client_socket_to_last_heartbeat;
+
 public:
 	bool online{false};
 
@@ -110,8 +113,17 @@ private:
 
 	/**
 	 * @brief Gathers all the packet's content (based on the length returned by `read_packet_length`)
+	 *
+	 * @param client Client to read packet from.
 	 */
 	void read_packet(rconpp::connected_client client);
+
+	/**
+	 * @brief Sends a heartbeat to a client.
+	 *
+	 * @param client Client to send a heartbeat to.
+	 */
+	void send_heartbeat(rconpp::connected_client client);
 };
 
 } // namespace rconpp
