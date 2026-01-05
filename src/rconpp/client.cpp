@@ -2,7 +2,6 @@
 #include "client.h"
 #include "utilities.h"
 
-
 rconpp::rcon_client::rcon_client(const std::string_view addr, const int _port, const std::string_view pass) : address(addr), port(_port), password(pass) {
 }
 
