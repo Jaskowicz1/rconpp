@@ -16,6 +16,7 @@ int main() {
 		std::cout << "No errors encountered, invalid client setups passed!" << "\n";
 	} catch(std::exception& e) {
 		std::cout << "Invalid client tests failed. Reason: " << e.what() << "\n";
+		throw std::logic_error(e.what());
 	}
 
 	try {
@@ -49,6 +50,7 @@ int main() {
 		}
 	} catch(std::exception& e) {
 		std::cout << "Client test failed. Reason: " << e.what() << "\n";
+		throw std::logic_error(e.what());
 	}
 
 	try {
@@ -73,5 +75,6 @@ int main() {
 		std::cout << "Server test passed!" << "\n";
 	} catch(std::exception& e) {
 		std::cout << "Server test failed. Reason: " << e.what() << "\n";
+		throw std::logic_error(e.what());
 	}
 }
