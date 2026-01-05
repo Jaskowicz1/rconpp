@@ -52,7 +52,7 @@ bool rconpp::rcon_server::startup_server() {
 		return false;
 	}
 
-	struct sockaddr_in server{};
+	sockaddr_in server{};
 
 	// Setup port, address, and family.
 	server.sin_family = AF_INET;
@@ -72,7 +72,7 @@ bool rconpp::rcon_server::startup_server() {
 
 	status = listen(sock, SOMAXCONN);
 
-	if(status == -1) {
+	if (status == -1) {
 		report_error();
 		return false;
 	}
@@ -90,7 +90,7 @@ void rconpp::rcon_server::disconnect_client(const int client_socket) {
 
 	connected_clients.at(client_socket).connected = false;
 
-	if(request_handlers.at(client_socket).joinable()) {
+	if (request_handlers.at(client_socket).joinable()) {
 		request_handlers.at(client_socket).join();
 	}
 
@@ -98,10 +98,10 @@ void rconpp::rcon_server::disconnect_client(const int client_socket) {
 }
 
 void rconpp::rcon_server::read_packet(rconpp::connected_client client) {
-	while(client.connected) {
-		size_t packet_size = read_packet_size(client);
+	while (client.connected) {
+		const int packet_size = read_packet_size(static_cast<int>(sock), on_log);
 
-		if(packet_size <= 10) {
+		if (packet_size <= MIN_PACKET_SIZE) {
 			continue;
 		}
 
@@ -119,20 +119,20 @@ void rconpp::rcon_server::read_packet(rconpp::connected_client client) {
 
 		rconpp::packet packet_to_send{};
 
-		if(!client.authenticated) {
-			if(packet_data == password) {
+		if (!client.authenticated) {
+			if (packet_data == password) {
 				packet_to_send = form_packet("", id, rconpp::data_type::SERVERDATA_AUTH_RESPONSE);
 				client.authenticated = true;
 			} else {
 				packet_to_send = form_packet("", -1, rconpp::data_type::SERVERDATA_AUTH_RESPONSE);
 			}
 		} else {
-			if(type != rconpp::data_type::SERVERDATA_EXECCOMMAND) {
+			if (type != rconpp::data_type::SERVERDATA_EXECCOMMAND) {
 				packet_to_send = form_packet("Invalid packet type (" + std::to_string(type) + "). Double check your packets.", id, rconpp::data_type::SERVERDATA_RESPONSE_VALUE);
 				on_log("Invalid packet type (" + std::to_string(type) + ") sent by [" + inet_ntoa(client.sock_info.sin_addr) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]. Double check your packets.");
 			} else {
 				on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has asked to execute the command: \"" + packet_data + "\"");
-				if(!on_command) {
+				if (!on_command) {
 					on_log("You have not set any response for on_command! The server will default to a blank response.");
 
 					/*
@@ -166,23 +166,6 @@ void rconpp::rcon_server::read_packet(rconpp::connected_client client) {
 	}
 }
 
-int rconpp::rcon_server::read_packet_size(const rconpp::connected_client client) {
-	std::vector<char> buffer{};
-	buffer.resize(4);
-
-	/*
-	 * RCON gives the packet SIZE in the first four (4) bytes of each packet.
-	 * We simply just want to read that and then return it.
-	 */
-	if (recv(client.socket, buffer.data(), 4, 0) == -1) {
-		on_log("Did not receive a packet in time. Did the server send a response?");
-		report_error();
-		return -1;
-	}
-
-	return bit32_to_int(buffer);
-}
-
 void rconpp::rcon_server::start(bool return_after) {
 	auto block_calling_thread = [this]() {
 		std::mutex thread_mutex;
@@ -190,7 +173,7 @@ void rconpp::rcon_server::start(bool return_after) {
 		this->terminating.wait(thread_lock);
 	};
 
-	if(port > 65535) {
+	if (port > 65535) {
 		on_log("Invalid port! The port can't exceed 65535!");
 		return;
 	}
@@ -198,7 +181,7 @@ void rconpp::rcon_server::start(bool return_after) {
 	on_log("Attempting to startup an RCON server...");
 
 	if (!startup_server()) {
-		on_log("RCON is aborting as it failed to initiate server.");
+		on_log("RCON++ is aborting as it failed to initiate server.");
 		return;
 	}
 
@@ -214,7 +197,7 @@ void rconpp::rcon_server::start(bool return_after) {
 			socklen_t client_len = sizeof(client_info);
 			int client_socket = accept(sock, reinterpret_cast<sockaddr*>(&client_info), &client_len);
 
-			if(client_socket == -1) {
+			if (client_socket == -1) {
 				on_log("client with socket: \"" + std::to_string(client_socket) + "\" failed to connect.");
 				continue;
 			}
@@ -241,7 +224,7 @@ void rconpp::rcon_server::start(bool return_after) {
 
 	on_log("Server is now ready!");
 
-	if(!return_after) {
+	if (!return_after) {
 		block_calling_thread();
 	}
 }

@@ -49,12 +49,12 @@ rconpp::response rconpp::rcon_client::send_data_sync(const std::string_view data
 bool rconpp::rcon_client::connect_to_server() {
 #ifdef _WIN32
 	// Initialize Winsock
-		WSADATA wsa_data;
-		int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
-		if (result != 0) {
-			on_log("WSAStartup failed. Error: " + std::to_string(result));
-			return false;
-		}
+	WSADATA wsa_data;
+	int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+	if (result != 0) {
+		on_log("WSAStartup failed. Error: " + std::to_string(result));
+		return false;
+	}
 #endif
 
 	// Create new TCP socket.
@@ -71,7 +71,7 @@ bool rconpp::rcon_client::connect_to_server() {
 	}
 
 	// Setup port, address, and family.
-	struct sockaddr_in server {};
+	sockaddr_in server{};
 	server.sin_family = AF_INET;
 #ifdef _WIN32
 	#ifdef UNICODE
@@ -85,7 +85,8 @@ bool rconpp::rcon_client::connect_to_server() {
 	server.sin_port = htons(port);
 
 #ifdef _WIN32
-	int corrected_timeout = DEFAULT_TIMEOUT * 1000;
+	// DEFAULT_TIMEOUT is in seconds (library was originally built for Linux and Linux/Unix uses seconds, we just need to convert to milliseconds for Windows.
+	const int corrected_timeout = DEFAULT_TIMEOUT * 1000;
 	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&corrected_timeout, sizeof(corrected_timeout));
 #else
 	// Set a timeout of 4 seconds.
@@ -109,32 +110,27 @@ bool rconpp::rcon_client::connect_to_server() {
 rconpp::response rconpp::rcon_client::receive_information(int32_t id, rconpp::data_type type) {
 	// Whilst this loop is better than a while loop,
 	// it should really just keep going for a certain amount of seconds.
-	for (int i = 0; i < 500; i++) {
+	for (int i = 0; i < MAX_RETRIES_TO_RECEIVE_INFO; i++) {
 		packet packet_response = read_packet();
 
-		int packet_type = bit32_to_int(packet_response.data);
+		const auto packet_type = static_cast<data_type>(bit32_to_int(packet_response.data));
 
 		if (packet_response.length == 0) {
-			if (packet_type != SERVERDATA_AUTH)
+			if (packet_type != SERVERDATA_AUTH) {
 				return { "", packet_response.server_responded };
-			else
-				continue;
+			}
+
+			continue;
 		}
 
 		if (type == SERVERDATA_AUTH) {
-			if (packet_type == -1) {
-				return { "", false };
-			} else {
-				if (packet_type == id) {
-					return { "", true };
-				}
-			}
+			return { "", packet_type == id };
 		}
 
 		if (packet_type == id) {
 			std::string part{};
 
-			if(packet_response.size > 10) {
+			if (packet_response.size > MIN_PACKET_SIZE) {
 				part = std::string(&packet_response.data[8], &packet_response.data[packet_response.data.size()-1]);
 			}
 
@@ -146,28 +142,26 @@ rconpp::response rconpp::rcon_client::receive_information(int32_t id, rconpp::da
 }
 
 rconpp::packet rconpp::rcon_client::read_packet() {
-	size_t packet_size = read_packet_size();
+	const int packet_size = read_packet_size(static_cast<int>(sock), on_log);
 
 	packet temp_packet{};
 	temp_packet.length = packet_size + 4;
 
-	if(packet_size > 0) {
+	if (packet_size > 0) {
 		temp_packet.size = packet_size;
 	}
 
-	/*
-	 * If the packet size is -1, the server didn't respond.
-	 * If the packet size is 0, the server did respond but said nothing.
-	 */
+	// If the packet size is -1, the server didn't respond.
 	if (packet_size == -1) {
-		return temp_packet;
-	}
-	else if (packet_size == 0) {
-		temp_packet.server_responded = true;
 		return temp_packet;
 	}
 
 	temp_packet.server_responded = true;
+
+	// If the packet size is 0, the server did respond but said nothing.
+	if (packet_size == 0) {
+		return temp_packet;
+	}
 
 	std::vector<char> buffer{};
 	buffer.resize(temp_packet.length);
@@ -183,32 +177,19 @@ rconpp::packet rconpp::rcon_client::read_packet() {
 	return temp_packet;
 }
 
-int rconpp::rcon_client::read_packet_size() {
-	std::vector<char> buffer{};
-	buffer.resize(4);
-
-	/*
-	 * RCON gives the packet SIZE in the first four (4) bytes of each packet.
-	 * We simply just want to read that and then return it.
-	 */
-	if (recv(sock, buffer.data(), 4, 0) == -1) {
-		on_log("Did not receive a packet in time. Did the server send a response?");
-		report_error();
-		return -1;
-	}
-
-	return bit32_to_int(buffer);
-}
-
-void rconpp::rcon_client::start(bool return_after) {
-
+void rconpp::rcon_client::start(const bool return_after) {
 	auto block_calling_thread = [this]() {
 		std::mutex thread_mutex;
 		std::unique_lock thread_lock(thread_mutex);
 		this->terminating.wait(thread_lock);
 	};
 
-	if(port > 65535) {
+	if (address.empty()) {
+		on_log("Address is empty! You need to pass a valid address!");
+		return;
+	}
+
+	if (port > 65535) {
 		on_log("Invalid port! The port can't exceed 65535!");
 		return;
 	}
@@ -216,17 +197,18 @@ void rconpp::rcon_client::start(bool return_after) {
 	on_log("Attempting connection to RCON server...");
 
 	if (!connect_to_server()) {
-		on_log("RCON is aborting as it failed to initiate client.");
+		on_log("RCON++ is aborting as it failed to initiate client.");
 		return;
 	}
 
 	on_log("Connected successfully! Sending login data...");
 
 	// The server will send SERVERDATA_AUTH_RESPONSE once it's happy. If it's not -1, the server will have accepted us!
-	response response = send_data_sync(password, 1, data_type::SERVERDATA_AUTH, true);
+	// We use the _sync method here to do a blocking call.
+	const response response = send_data_sync(password, 1, data_type::SERVERDATA_AUTH, true);
 
 	if (!response.server_responded) {
-		on_log("Login data was incorrect. RCON will now abort.");
+		on_log("Login data was incorrect. RCON++ will now abort.");
 		return;
 	}
 
@@ -252,7 +234,7 @@ void rconpp::rcon_client::start(bool return_after) {
 		}
 	});
 
-	if(!return_after) {
+	if (!return_after) {
 		block_calling_thread();
 	}
 };

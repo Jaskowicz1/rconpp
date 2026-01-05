@@ -6,6 +6,11 @@ option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_compile_definitions(RCONPP_BUILD)
 
+if(WIN32)
+	add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+	add_compile_definitions(_WINSOCK_DEPRECATED_NO_WARNINGS)
+endif ()
+
 set(RCONPP_ROOT_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 
 project(rconpp

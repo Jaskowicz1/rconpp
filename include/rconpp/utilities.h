@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include "export.h"
 #include <string>
 #include <string_view>
@@ -8,9 +10,10 @@
 
 namespace rconpp {
 
-constexpr int DEFAULT_TIMEOUT = 4;
+constexpr int DEFAULT_TIMEOUT = 4; // In Seconds.
 constexpr int MIN_PACKET_SIZE = 10;
 constexpr int MIN_PACKET_LENGTH = 14;
+constexpr int MAX_RETRIES_TO_RECEIVE_INFO = 500;
 
 enum data_type {
 	/**
@@ -90,5 +93,12 @@ RCONPP_EXPORT int type_to_int(const std::vector<char>& buffer);
  * @brief Reports the recent socket error.
  */
 RCONPP_EXPORT void report_error();
+
+/**
+ * @brief Reads the first 4 bytes of a packet to get the packet size (not to be mistaken with length).
+ *
+ * @return The size (not length) of the packet.
+ */
+RCONPP_EXPORT int read_packet_size(int socket, const std::function<void(const std::string_view log)>& on_log);
 
 } // namespace rconpp
