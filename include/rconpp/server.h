@@ -112,13 +112,6 @@ private:
 	 * @brief Gathers all the packet's content (based on the length returned by `read_packet_length`)
 	 */
 	void read_packet(rconpp::connected_client client);
-
-	/**
-	 * @brief Reads the first 4 bytes of a packet to get the packet size (not to be mistaken with length).
-	 *
-	 * @return The size (not length) of the packet.
-	 */
-	int read_packet_size(const rconpp::connected_client client);
 };
 
 } // namespace rconpp

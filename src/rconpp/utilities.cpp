@@ -43,3 +43,20 @@ void rconpp::report_error() {
 	std::cout << "Error code: " << errno << "\n";
 #endif
 }
+
+int rconpp::read_packet_size(int socket, const std::function<void(const std::string_view log)>& on_log) {
+	std::vector<char> buffer{};
+	buffer.resize(4);
+
+	/*
+	 * RCON gives the packet SIZE in the first four (4) bytes of each packet.
+	 * We simply just want to read that and then return it.
+	 */
+	if (recv(socket, buffer.data(), 4, 0) == -1) {
+		on_log("Did not receive a packet in time. Did the server send a response?");
+		report_error();
+		return -1;
+	}
+
+	return bit32_to_int(buffer);
+}

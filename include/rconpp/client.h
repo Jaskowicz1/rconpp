@@ -77,7 +77,7 @@ public:
 	 *
 	 * @warning If you are expecting no response from the server, do NOT use the callback. You will halt the RCON process until the next received message (which will chain).
 	 */
-	void send_data(const std::string_view data, const int32_t id, data_type type, std::function<void(const response& retrieved_data)> callback = {}) {
+	void send_data(const std::string_view data, const int32_t id, const data_type type, std::function<void(const response& retrieved_data)> callback = {}) {
 		requests_queued.emplace_back(queued_request{ std::string{data}, id, type, std::move(callback) });
 	}
 
@@ -122,13 +122,6 @@ private:
 	 * @return A packet structure containing the length, size, data, and if server responded.
 	 */
 	packet read_packet();
-
-	/**
-	 * @brief Reads the first 4 bytes of a packet to get the packet size (not to be mistaken with length).
-	 *
-	 * @return The size (not length) of the packet.
-	 */
-	int read_packet_size();
 };
 
 } // namespace rconpp

@@ -1,7 +1,26 @@
 #include "../include/rconpp/rcon.h"
 
 int main() {
+
 	try {
+		std::cout << "Attempting invalid client setups!" << "\n";
+
+		// Bad ports
+		rconpp::rcon_client badclient_a("", -1, "");
+		rconpp::rcon_client badclient_b("", 65536, "");
+
+		// Bad addresses
+		rconpp::rcon_client badclient_c("", 9, "");
+		rconpp::rcon_client badclient_d("0.1.2.3", 9, "");
+
+		std::cout << "No errors encountered, invalid client setups passed!" << "\n";
+	} catch(std::exception& e) {
+		std::cout << "Invalid client tests failed. Reason: " << e.what() << "\n";
+	}
+
+	try {
+		std::cout << "Attempting valid client setup!" << "\n";
+
 		if (!std::getenv("RCON_TESTING_IP") || !std::getenv("RCON_TESTING_PORT") ||
 		    !std::getenv("RCON_TESTING_PASSWORD")) {
 			throw std::invalid_argument("Environment variables not set.");
@@ -23,12 +42,11 @@ int main() {
 				std::cout << "Server responded!" << "\n";
 				std::cout << "Client test passed!" << "\n";
 			} else {
-				std::cout << "No server response." << "\n";
+				throw std::logic_error("No server response.");
 			}
 		} else {
-			std::cout << "No connection!" << "\n";
+			throw std::logic_error("Failed to make a connection to the server.");
 		}
-
 	} catch(std::exception& e) {
 		std::cout << "Client test failed. Reason: " << e.what() << "\n";
 	}

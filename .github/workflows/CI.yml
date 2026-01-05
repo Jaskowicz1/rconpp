@@ -26,13 +26,11 @@ jobs:
       fail-fast: false # Don't fail everything if one fails. We want to test each OS/Compiler individually
       matrix:
         cfg:
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: clang-10, cpp-version: clang++-10, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-11, cpp-version: clang++-11, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-12, cpp-version: clang++-12, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-13, cpp-version: clang++-13, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-14, cpp-version: clang++-14, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-15, cpp-version: clang++-15, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-20.04, package: g++-9,    cpp-version: g++-9,      ctest: 'yes', cpack: 'no',  downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-10,   cpp-version: g++-10,     ctest: 'no',  cpack: 'yes', downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-11,   cpp-version: g++-11,     ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-12,   cpp-version: g++-12,     ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
@@ -87,10 +85,6 @@ jobs:
       fail-fast: false # Don't cancel other matrix jobs if one fails
       matrix:
         cfg:
-          - { name: 'x64',            arch: x64, config: Release, vs: '2019', os: 'windows-2019', vsv: '16', upload: true,  options: '' }
-          - { name: 'x64',            arch: x64, config: Debug,   vs: '2019', os: 'windows-2019', vsv: '16', upload: true,  options: '' }
-          - { name: 'x86',            arch: x86, config: Release, vs: '2019', os: 'windows-2019', vsv: '16', upload: true,  options: '-T host=x86 ' }
-          - { name: 'x86',            arch: x86, config: Debug,   vs: '2019', os: 'windows-2019', vsv: '16', upload: true,  options: '-T host=x86 ' }
           - { name: 'x64',            arch: x64, config: Release, vs: '2022', os: 'windows-2022', vsv: '17', upload: true,  options: '' }
           - { name: 'x64',            arch: x64, config: Debug,   vs: '2022', os: 'windows-2022', vsv: '17', upload: true,  options: '' }
           - { name: 'x86',            arch: x86, config: Release, vs: '2022', os: 'windows-2022', vsv: '17', upload: true,  options: '-T host=x86' }
