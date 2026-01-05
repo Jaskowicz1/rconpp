@@ -26,10 +26,10 @@ jobs:
       fail-fast: false # Don't fail everything if one fails. We want to test each OS/Compiler individually
       matrix:
         cfg:
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-11, cpp-version: clang++-11, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-24.04, package: clang-16, cpp-version: clang++-16, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-10,   cpp-version: g++-10,     ctest: 'no',  cpack: 'yes', downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-24.04, package: g++-13,   cpp-version: g++-13,     ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-11, cpp-version: clang++-11, ctest: 'no',  cpack: 'no',   downloadcpp: 'yes' }
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-24.04, package: clang-16, cpp-version: clang++-16, ctest: 'yes', cpack: 'yes',  downloadcpp: 'yes' }
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-10,   cpp-version: g++-10,     ctest: 'no',  cpack: 'no',   downloadcpp: 'yes' }
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-24.04, package: g++-13,   cpp-version: g++-13,     ctest: 'no',  cpack: 'no',   downloadcpp: 'yes' }
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
