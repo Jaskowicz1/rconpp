@@ -27,14 +27,9 @@ jobs:
       matrix:
         cfg:
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-11, cpp-version: clang++-11, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-12, cpp-version: clang++-12, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-13, cpp-version: clang++-13, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-14, cpp-version: clang++-14, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: clang-15, cpp-version: clang++-15, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-24.04, package: clang-16, cpp-version: clang++-16, ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
           - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-10,   cpp-version: g++-10,     ctest: 'no',  cpack: 'yes', downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-11,   cpp-version: g++-11,     ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-12,   cpp-version: g++-12,     ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
-          - { arch: 'amd64', concurrency: 2, os: ubuntu-22.04, package: g++-13,   cpp-version: g++-13,     ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
+          - { arch: 'amd64', concurrency: 2, os: ubuntu-24.04, package: g++-13,   cpp-version: g++-13,     ctest: 'no',  cpack: 'no',  downloadcpp: 'yes'}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
