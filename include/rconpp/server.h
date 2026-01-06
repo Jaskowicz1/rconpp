@@ -23,11 +23,13 @@
 namespace rconpp {
 
 struct connected_client {
-	struct sockaddr_in sock_info{};
+	sockaddr_in sock_info{};
 	int socket{0};
 	bool connected{false};
 
 	bool authenticated{false};
+
+	time_t last_heartbeat{0};
 };
 
 struct client_command {
@@ -47,6 +49,7 @@ class RCONPP_EXPORT rcon_server {
 #endif
 
 	std::thread accept_connections_runner;
+	std::mutex connected_clients_mutex;
 
 public:
 	bool online{false};
@@ -84,8 +87,9 @@ public:
 	 * @brief Disconnect a client from the server.
 	 *
 	 * @param client_socket The socket of the client to disconnect.
+	 * @param remove_after Should remove client from connected_clients after?
 	 */
-	void disconnect_client(const int client_socket);
+	void disconnect_client(int client_socket, bool remove_after = true);
 
 private:
 
@@ -99,19 +103,20 @@ private:
 	bool startup_server();
 
 	/**
-	 * @brief Ask to receive information from the server for a specified ID.
+	 * @brief Gathers all the packet's content (based on the length returned by `read_packet_length`)
 	 *
-	 * @param id The ID that we should except the server to return, alongside information.
-	 * @param type The type of packet that we should expect.
-	 *
-	 * @return Data given by the server.
+	 * @param client Client to read packet from.
 	 */
-	response receive_information(int32_t id, data_type type);
+	void read_packet(connected_client& client);
 
 	/**
-	 * @brief Gathers all the packet's content (based on the length returned by `read_packet_length`)
+	 * @brief Sends a heartbeat to a client.
+	 *
+	 * @param client Client to send a heartbeat to.
+	 *
+	 * @returns bool, true is heartbeat was sent, otherwise false.
 	 */
-	void read_packet(rconpp::connected_client client);
+	bool send_heartbeat(connected_client& client);
 };
 
 } // namespace rconpp

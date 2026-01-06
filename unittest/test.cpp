@@ -3,7 +3,7 @@
 int main() {
 
 	try {
-		std::cout << "Attempting invalid client setups!" << "\n";
+		std::cout << "Attempting invalid client setups..." << "\n";
 
 		// Bad ports
 		rconpp::rcon_client badclient_a("", -1, "");
@@ -16,65 +16,95 @@ int main() {
 		std::cout << "No errors encountered, invalid client setups passed!" << "\n";
 	} catch(std::exception& e) {
 		std::cout << "Invalid client tests failed. Reason: " << e.what() << "\n";
-		throw std::logic_error(e.what());
+		return 1;
 	}
 
 	try {
-		std::cout << "Attempting valid client setup!" << "\n";
+		std::cout << "Attempting Full Server test..." << "\n";
 
-		if (!std::getenv("RCON_TESTING_IP") || !std::getenv("RCON_TESTING_PORT") ||
-		    !std::getenv("RCON_TESTING_PASSWORD")) {
-			throw std::invalid_argument("Environment variables not set.");
-		}
+		rconpp::rcon_server server("0.0.0.0", 27012, "testing");
 
-		rconpp::rcon_client client(std::getenv("RCON_TESTING_IP"), std::stoi(std::getenv("RCON_TESTING_PORT")),
-					   std::getenv("RCON_TESTING_PASSWORD"));
-
-		client.on_log = [](const std::string_view log) {
-			std::cout << log << "\n";
+		server.on_log = [](const std::string_view log) {
+			std::cout << "SERVER: " << log << "\n";
 		};
 
-	 	client.start(true);
+		server.on_command = [](const rconpp::client_command& command) {
+			if (command.command == "test") {
+				return "Success";
+			}
+
+			return "Bad Command";
+		};
+
+		server.start(true);
+
+		std::cout << "Waiting 1 second, then booting client..." << "\n";
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+
+		rconpp::rcon_client client("127.0.0.1", 27012, "testing");
+
+		client.on_log = [](const std::string_view log) {
+			std::cout << "CLIENT: " << log << "\n";
+		};
+
+		client.start(true);
 
 		if (client.connected) {
-			rconpp::response res = client.send_data_sync("testing", 3, rconpp::data_type::SERVERDATA_EXECCOMMAND);
+			std::cout << "Client connected! Sending test command..." << "\n";
+			rconpp::response res = client.send_data_sync("test", 3, rconpp::data_type::SERVERDATA_EXECCOMMAND);
 
-			if (res.server_responded) {
-				std::cout << "Server responded!" << "\n";
-				std::cout << "Client test passed!" << "\n";
+			if (res.server_responded && res.data.find("Success") != std::string::npos) {
+				std::cout << "Server responded with Success, Full Server test passed!" << "\n";
 			} else {
-				throw std::logic_error("No server response.");
+				std::cout << "Bad response received! Response from server was: " << res.data << "\n";
+				throw std::logic_error("No server response or bad response sent by server.");
 			}
 		} else {
 			throw std::logic_error("Failed to make a connection to the server.");
 		}
 	} catch(std::exception& e) {
-		std::cout << "Client test failed. Reason: " << e.what() << "\n";
-		throw std::logic_error(e.what());
+		std::cout << "Full Server test failed. Reason: " << e.what() << "\n";
+		return 1;
 	}
 
-	try {
-		rconpp::rcon_server server("0.0.0.0", 27015, "testing");
+	if (std::getenv("RCON_TESTING_IP") && std::getenv("RCON_TESTING_PORT") &&
+			std::getenv("RCON_TESTING_PASSWORD")) {
+		try {
+			std::cout << "Attempting Online Client test..." << "\n";
 
-		server.on_log = [](const std::string_view log) {
-			std::cout << log << "\n";
-		};
+			if (!std::getenv("RCON_TESTING_IP") || !std::getenv("RCON_TESTING_PORT") ||
+				!std::getenv("RCON_TESTING_PASSWORD")) {
+				throw std::invalid_argument("Environment variables not set.");
+				}
 
-		server.on_command = [](const rconpp::client_command& command) {
-			if (command.command == "test") {
-				return "This is a test!";
-			} else if (command.command == "/players") {
-				return "Players: none lol";
+			rconpp::rcon_client client(std::getenv("RCON_TESTING_IP"), std::stoi(std::getenv("RCON_TESTING_PORT")),
+						   std::getenv("RCON_TESTING_PASSWORD"));
+
+			client.on_log = [](const std::string_view log) {
+				std::cout << log << "\n";
+			};
+
+			client.start(true);
+
+			if (client.connected) {
+				rconpp::response res = client.send_data_sync("testing", 3, rconpp::data_type::SERVERDATA_EXECCOMMAND);
+
+				if (res.server_responded) {
+					std::cout << "Server responded, Client test passed!" << "\n";
+				} else {
+					throw std::logic_error("No server response.");
+				}
 			} else {
-				return "Hello!";
+				throw std::logic_error("Failed to make a connection to the server.");
 			}
-		};
-
-		server.start(true);
-
-		std::cout << "Server test passed!" << "\n";
-	} catch(std::exception& e) {
-		std::cout << "Server test failed. Reason: " << e.what() << "\n";
-		throw std::logic_error(e.what());
+		} catch(std::exception& e) {
+			std::cout << "Online Client test failed. Reason: " << e.what() << "\n";
+			return 1;
+		}
 	}
+	else {
+		std::cout << "Online Client test not running as environment variables not set." << "\n";
+	}
+
+	return 0;
 }
