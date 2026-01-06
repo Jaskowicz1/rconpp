@@ -1,4 +1,5 @@
 #include <mutex>
+#include <csignal>
 #include "server.h"
 
 #include "utilities.h"
@@ -41,6 +42,8 @@ bool rconpp::rcon_server::startup_server() {
 		on_log("WSAStartup failed. Error: " + std::to_string(result));
 		return false;
 	}
+#else
+	signal(SIGPIPE, SIG_IGN);
 #endif
 
 	// Create new TCP socket.
