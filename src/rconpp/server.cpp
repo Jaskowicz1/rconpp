@@ -97,11 +97,21 @@ void rconpp::rcon_server::disconnect_client(const int client_socket, const bool 
 
 	std::lock_guard guard(connected_clients_mutex);
 
-	connected_clients.at(client_socket).connected = false;
+	if (connected_clients.find(client_socket) == connected_clients.end())
+	{
+		return;
+	}
+
+	connected_client& client = connected_clients.at(client_socket);
+
+	client.connected = false;
+	client.authenticated = false;
 
 	if (request_handlers.at(client_socket).joinable()) {
 		request_handlers.at(client_socket).join();
 	}
+
+	on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has been disconnected from the server.");
 
 	if (remove_after) {
 		connected_clients.erase(client_socket);
@@ -251,6 +261,7 @@ void rconpp::rcon_server::start(bool return_after) {
 						{
 							if (!send_heartbeat(client)) {
 								disconnect_client(client.socket);
+								return;
 							}
 						}
 					}
