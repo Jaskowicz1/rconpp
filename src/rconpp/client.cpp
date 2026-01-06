@@ -6,6 +6,9 @@ rconpp::rcon_client::rcon_client(const std::string_view addr, const int _port, c
 }
 
 rconpp::rcon_client::~rcon_client() {
+	if (on_log) {
+		on_log("RCON client is shutting down.");
+	}
 	// Set connected to false, meaning no requests can be attempted during shutdown.
 	connected = false;
 
@@ -142,7 +145,12 @@ rconpp::response rconpp::rcon_client::receive_information(int32_t id, rconpp::da
 }
 
 rconpp::packet rconpp::rcon_client::read_packet() {
-	const int packet_size = read_packet_size(static_cast<int>(sock), on_log);
+	const int packet_size = read_packet_size(static_cast<int>(sock));
+
+	if (packet_size == -1) {
+		on_log("Did not receive a packet in time. Did the server send a response?");
+		return {};
+	}
 
 	packet temp_packet{};
 	temp_packet.length = packet_size + 4;
@@ -205,7 +213,7 @@ void rconpp::rcon_client::start(const bool return_after) {
 
 	// The server will send SERVERDATA_AUTH_RESPONSE once it's happy. If it's not -1, the server will have accepted us!
 	// We use the _sync method here to do a blocking call.
-	const response response = send_data_sync(password, 1, data_type::SERVERDATA_AUTH, true);
+	const response response = send_data_sync(password, 1, SERVERDATA_AUTH, true);
 
 	if (!response.server_responded) {
 		on_log("Login data was incorrect. RCON++ will now abort.");

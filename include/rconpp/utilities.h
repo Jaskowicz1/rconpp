@@ -101,6 +101,6 @@ RCONPP_EXPORT void report_error();
  *
  * @return The size (not length) of the packet.
  */
-RCONPP_EXPORT int read_packet_size(int socket, const std::function<void(const std::string_view log)>& on_log);
+RCONPP_EXPORT int read_packet_size(int socket);
 
 } // namespace rconpp
