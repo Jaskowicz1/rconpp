@@ -16,7 +16,7 @@ int main() {
 		std::cout << "No errors encountered, invalid client setups passed!" << "\n";
 	} catch(std::exception& e) {
 		std::cout << "Invalid client tests failed. Reason: " << e.what() << "\n";
-		return 1;
+		return -1;
 	}
 
 	try {
@@ -64,7 +64,7 @@ int main() {
 		}
 	} catch(std::exception& e) {
 		std::cout << "Full Server test failed. Reason: " << e.what() << "\n";
-		return 1;
+		return -1;
 	}
 
 	if (std::getenv("RCON_TESTING_IP") && std::getenv("RCON_TESTING_PORT") &&
@@ -99,7 +99,7 @@ int main() {
 			}
 		} catch(std::exception& e) {
 			std::cout << "Online Client test failed. Reason: " << e.what() << "\n";
-			return 1;
+			return -1;
 		}
 	}
 	else {

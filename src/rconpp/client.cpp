@@ -104,6 +104,7 @@ bool rconpp::rcon_client::connect_to_server() {
 	int status = connect(sock, (struct sockaddr*)&server, sizeof(server));
 
 	if (status == -1) {
+		report_error();
 		return false;
 	}
 
@@ -115,6 +116,10 @@ rconpp::response rconpp::rcon_client::receive_information(int32_t id, rconpp::da
 	// it should really just keep going for a certain amount of seconds.
 	for (int i = 0; i < MAX_RETRIES_TO_RECEIVE_INFO; i++) {
 		packet packet_response = read_packet();
+
+		if (packet_response.length == -1) {
+			continue;
+		}
 
 		const auto packet_type = static_cast<data_type>(bit32_to_int(packet_response.data));
 
@@ -141,6 +146,7 @@ rconpp::response rconpp::rcon_client::receive_information(int32_t id, rconpp::da
 		}
 	}
 
+	on_log("Did not receive a packet in time. Did the server send a response?");
 	return { "", false };
 }
 
@@ -148,7 +154,6 @@ rconpp::packet rconpp::rcon_client::read_packet() {
 	const int packet_size = read_packet_size(static_cast<int>(sock));
 
 	if (packet_size == -1) {
-		on_log("Did not receive a packet in time. Did the server send a response?");
 		return {};
 	}
 
@@ -157,11 +162,6 @@ rconpp::packet rconpp::rcon_client::read_packet() {
 
 	if (packet_size > 0) {
 		temp_packet.size = packet_size;
-	}
-
-	// If the packet size is -1, the server didn't respond.
-	if (packet_size == -1) {
-		return temp_packet;
 	}
 
 	temp_packet.server_responded = true;
@@ -205,7 +205,7 @@ void rconpp::rcon_client::start(const bool return_after) {
 	on_log("Attempting connection to RCON server...");
 
 	if (!connect_to_server()) {
-		on_log("RCON++ is aborting as it failed to initiate client.");
+		on_log("RCON++ is aborting as it failed to connect to the RCON server. Double check the IP and port.");
 		return;
 	}
 
@@ -220,7 +220,7 @@ void rconpp::rcon_client::start(const bool return_after) {
 		return;
 	}
 
-	on_log("Sent login data.");
+	on_log("Login Data sent successfully, we have been accepted!");
 
 	connected = true;
 
