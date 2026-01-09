@@ -26,8 +26,8 @@ rconpp::rcon_client::~rcon_client() {
 	}
 }
 
-rconpp::response rconpp::rcon_client::send_data_sync(const std::string_view data, const int32_t id, rconpp::data_type type, bool feedback) {
-	if (!connected && type != data_type::SERVERDATA_AUTH) {
+rconpp::response rconpp::rcon_client::send_data_sync(const std::string_view data, const int32_t id, data_type type, bool feedback) {
+	if (!connected && type != SERVERDATA_AUTH) {
 		on_log("Cannot send data when not connected.");
 		return { "", false };
 	}
@@ -38,6 +38,18 @@ rconpp::response rconpp::rcon_client::send_data_sync(const std::string_view data
 		on_log("Sending failed!");
 		report_error();
 		return { "", false };
+	}
+
+	// Multi-packet response requires us to send a "SERVERDATA_RESPONSE_VALUE" after every SERVERDATA_EXECCOMMAND request.
+	// If server supports it, they should mirror it back to the client, then send "RESPONSE_VALUE" with 0x0000000100000000 as packet body.
+	if (type == SERVERDATA_EXECCOMMAND) {
+		packet empty_packet = form_packet("", id, SERVERDATA_RESPONSE_VALUE);
+
+		if (send(sock, formed_packet.data.data(), formed_packet.length, 0) < 0) {
+			on_log("Sending failed!");
+			report_error();
+			return { "", false };
+		}
 	}
 
 	if (!feedback) {
@@ -111,7 +123,7 @@ bool rconpp::rcon_client::connect_to_server() {
 	return true;
 }
 
-rconpp::response rconpp::rcon_client::receive_information(int32_t id, rconpp::data_type type) {
+rconpp::response rconpp::rcon_client::receive_information(int32_t id, data_type type) {
 	// Whilst this loop is better than a while loop,
 	// it should really just keep going for a certain amount of seconds.
 	for (int i = 0; i < MAX_RETRIES_TO_RECEIVE_INFO; i++) {

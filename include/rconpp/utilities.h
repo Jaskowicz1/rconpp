@@ -19,7 +19,7 @@ constexpr int HEARTBEAT_TIME = 30;
 
 enum data_type {
 	/**
-	 * @brief A response to a SERVERDATA_EXECOMMAND packet.
+	 * @brief A response to a SERVERDATA_EXECCOMMAND packet.
 	 *
 	 * @note You should **ALWAYS** send this packet upon an SERVERDATA_EXECCOMMAND packet.
 	 * Whilst rcon++ will handle no response safely, other libraries may not.
