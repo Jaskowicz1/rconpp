@@ -68,7 +68,6 @@ rconpp::error_type rconpp::report_get_last_error() {
 		case 104:
 			current_error = DISCONNECTED;
 			break;
-		case:
 	}
 #endif
 
