@@ -2,8 +2,6 @@
 
 #ifdef _WIN32
 #include <winsock2.h>
-#else
-#include <sys/socket.h>
 #endif
 #include <cstring>
 
@@ -47,7 +45,7 @@ rconpp::error_type rconpp::report_get_last_error() {
 	last_error = WSAGetLastError();
 #else
 	last_error = errno;
-#endif;
+#endif
 
 	std::cout << "Error code: " << last_error << "\n";
 
