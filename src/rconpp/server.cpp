@@ -55,7 +55,7 @@ bool rconpp::rcon_server::startup_server() {
 	if (sock == -1) {
 #endif
 		on_log("Failed to open socket.");
-		report_error();
+		report_get_last_error();
 		return false;
 	}
 
@@ -73,14 +73,14 @@ bool rconpp::rcon_server::startup_server() {
 	int status = bind(sock, reinterpret_cast<const sockaddr*>(&server), sizeof(server));
 
 	if (status == -1) {
-		report_error();
+		report_get_last_error();
 		return false;
 	}
 
 	status = listen(sock, SOMAXCONN);
 
 	if (status == -1) {
-		report_error();
+		report_get_last_error();
 		return false;
 	}
 
@@ -119,7 +119,7 @@ void rconpp::rcon_server::disconnect_client(const int client_socket, const bool 
 }
 
 void rconpp::rcon_server::read_packet(connected_client& client) {
-	const int packet_size = read_packet_size(static_cast<int>(client.socket));
+	const int packet_size = read_packet_size(client.socket);
 
 	// Silently ignore packet size.
 	if (packet_size < MIN_PACKET_SIZE) {
@@ -129,9 +129,9 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 	std::vector<char> buffer{};
 	buffer.resize(packet_size);
 
-	if (recv(client.socket, buffer.data(), packet_size, 0) == -1) {
+	if (recv(client.socket, buffer.data(), packet_size, MSG_NOSIGNAL) == -1) {
 		on_log("Failed to get a packet from client.");
-		report_error();
+		report_get_last_error();
 		return;
 	}
 
@@ -149,8 +149,10 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 		if (packet_data == password) {
 			packet_to_send = form_packet("", id, SERVERDATA_AUTH_RESPONSE);
 			client.authenticated = true;
+			on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has authenticated successfully!");
 		} else {
 			packet_to_send = form_packet("", -1, SERVERDATA_AUTH_RESPONSE);
+			on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] failed authentication!");
 		}
 	} else {
 		if (type != SERVERDATA_EXECCOMMAND) {
@@ -184,9 +186,9 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 
 	on_log("Sending packet (of size: " + std::to_string(packet_to_send.length) + ") to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]");
 
-	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, 0) < 0) {
+	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, MSG_NOSIGNAL) < 0) {
 		on_log("Sending failed!");
-		report_error();
+		report_get_last_error();
 		return;
 	}
 }
@@ -195,9 +197,9 @@ bool rconpp::rcon_server::send_heartbeat(connected_client& client) {
 	on_log("Sending heartbeat to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]");
 
 	packet packet_to_send = form_packet("", -1, SERVERDATA_RESPONSE_VALUE);
-	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, 0) < 0) {
+	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, MSG_NOSIGNAL) < 0) {
 		on_log("Failed to send a heartbeat to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]");
-		report_error();
+		report_get_last_error();
 		return false;
 	}
 
@@ -238,11 +240,11 @@ void rconpp::rcon_server::start(bool return_after) {
 
 			if (client_socket == -1) {
 				on_log("client with socket: \"" + std::to_string(client_socket) + "\" failed to connect.");
-				report_error();
+				report_get_last_error();
 				continue;
 			}
 
-			on_log("Client [" + std::string(inet_ntoa(client_info.sin_addr)) + ":" + std::to_string(ntohs(client_info.sin_port)) + "] has connected to the server.");
+			on_log("Client [" + std::string(inet_ntoa(client_info.sin_addr)) + ":" + std::to_string(ntohs(client_info.sin_port)) + "] has connected to the server, asking for authentication.");
 
 			connected_client client{};
 
@@ -260,10 +262,14 @@ void rconpp::rcon_server::start(bool return_after) {
 						if (client.last_heartbeat == 0 || current_time - client.last_heartbeat >= HEARTBEAT_TIME)
 						{
 							if (!send_heartbeat(client)) {
-								disconnect_client(client.socket);
-								return;
+								client.force_disconnect = true;
 							}
 						}
+					}
+
+					if (client.force_disconnect) {
+						disconnect_client(client.socket);
+						return;
 					}
 
 					// No need to let the server keep running this causing 100% usage on a thread, we can wait a bit between requests.

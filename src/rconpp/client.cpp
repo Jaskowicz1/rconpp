@@ -34,9 +34,9 @@ rconpp::response rconpp::rcon_client::send_data_sync(const std::string_view data
 
 	packet formed_packet = form_packet(data, id, type);
 
-	if (send(sock, formed_packet.data.data(), formed_packet.length, 0) < 0) {
+	if (send(sock, formed_packet.data.data(), formed_packet.length, MSG_NOSIGNAL) < 0) {
 		on_log("Sending failed!");
-		report_error();
+		report_get_last_error();
 		return { "", false };
 	}
 
@@ -69,7 +69,7 @@ bool rconpp::rcon_client::connect_to_server() {
 	if (sock == -1) {
 #endif
 		on_log("Failed to open socket.");
-		report_error();
+		report_get_last_error();
 		return false;
 	}
 
@@ -104,7 +104,7 @@ bool rconpp::rcon_client::connect_to_server() {
 	int status = connect(sock, (struct sockaddr*)&server, sizeof(server));
 
 	if (status == -1) {
-		report_error();
+		report_get_last_error();
 		return false;
 	}
 
@@ -178,7 +178,7 @@ rconpp::packet rconpp::rcon_client::read_packet() {
 	 * Receiving by the length of the packet will give us 4 extra bytes, so, we do by size here.
 	 * This is because read_packet_size() reads the first 4 bytes and discards them.
 	 */
-	recv(sock, buffer.data(), temp_packet.size, 0);
+	recv(sock, buffer.data(), temp_packet.size, MSG_NOSIGNAL);
 
 	temp_packet.data = buffer;
 

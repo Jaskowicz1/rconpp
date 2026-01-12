@@ -38,12 +38,41 @@ int rconpp::type_to_int(const std::vector<char>& buffer) {
 	return static_cast<int>(buffer[4] | buffer[5] << 8 | buffer[6] << 16 | buffer[7] << 24);
 }
 
-void rconpp::report_error() {
+rconpp::error_type rconpp::report_get_last_error() {
+	error_type current_error;
+
+	int last_error{-1};
+
 #ifdef _WIN32
-	std::cout << "Error code: " << WSAGetLastError() << "\n";
+	last_error = WSAGetLastError();
 #else
-	std::cout << "Error code: " << errno << "\n";
+	last_error = errno;
+#endif;
+
+	std::cout << "Error code: " << last_error << "\n";
+
+#ifdef _WIN32
+	switch (last_error) {
+		default:
+		case WSAECONNRESET:
+			current_error = DISCONNECTED;
+			break;
+		case WSAEINTR:
+			current_error = SHUTTING_DOWN;
+			break;
+	}
+#else
+	switch (last_error) {
+		default:
+		case 32:
+		case 104:
+			current_error = DISCONNECTED;
+			break;
+		case:
+	}
 #endif
+
+	return current_error;
 }
 
 int rconpp::read_packet_size(int socket) {
@@ -54,8 +83,8 @@ int rconpp::read_packet_size(int socket) {
 	 * RCON gives the packet SIZE in the first four (4) bytes of each packet.
 	 * We simply just want to read that and then return it.
 	 */
-	if (recv(socket, buffer.data(), 4, 0) == -1) {
-		report_error();
+	if (recv(socket, buffer.data(), 4, MSG_NOSIGNAL) == -1) {
+		report_get_last_error();
 		return -1;
 	}
 

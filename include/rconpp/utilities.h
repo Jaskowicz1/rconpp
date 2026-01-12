@@ -16,6 +16,10 @@ constexpr int MIN_PACKET_LENGTH = 14;
 constexpr int MAX_RETRIES_TO_RECEIVE_INFO = 500;
 constexpr int HEARTBEAT_TIME = 30;
 
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+
 
 enum data_type {
 	/**
@@ -62,6 +66,12 @@ struct response {
 	bool server_responded{false};
 };
 
+enum error_type {
+	DISCONNECTED = 0,
+	BAD_FD = 1,
+	SHUTTING_DOWN = 2,
+};
+
 /**
  * @brief Form a valid RCON packet.
  *
@@ -92,9 +102,9 @@ RCONPP_EXPORT int bit32_to_int(const std::vector<char>& buffer);
 RCONPP_EXPORT int type_to_int(const std::vector<char>& buffer);
 
 /**
- * @brief Reports the recent socket error.
+ * @brief Converts the last error into error_type and reports it.
  */
-RCONPP_EXPORT void report_error();
+RCONPP_EXPORT error_type report_get_last_error();
 
 /**
  * @brief Reads the first 4 bytes of a packet to get the packet size (not to be mistaken with length).

@@ -29,6 +29,8 @@ struct connected_client {
 
 	bool authenticated{false};
 
+	bool force_disconnect{false};
+
 	time_t last_heartbeat{0};
 };
 
