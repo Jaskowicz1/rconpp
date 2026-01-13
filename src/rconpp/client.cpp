@@ -9,6 +9,7 @@ rconpp::rcon_client::~rcon_client() {
 	if (on_log) {
 		on_log("RCON client is shutting down.");
 	}
+
 	// Set connected to false, meaning no requests can be attempted during shutdown.
 	connected = false;
 
@@ -20,6 +21,7 @@ rconpp::rcon_client::~rcon_client() {
 #else
 	close(sock);
 #endif
+
 	// Join the queue runner (if allowed), meaning we await its end before killing this object, preventing any corruption.
 	if (queue_runner.joinable()) {
 		queue_runner.join();
@@ -35,8 +37,8 @@ rconpp::response rconpp::rcon_client::send_data_sync(const std::string_view data
 	packet formed_packet = form_packet(data, id, type);
 
 	if (send(sock, formed_packet.data.data(), formed_packet.length, MSG_NOSIGNAL) < 0) {
-		on_log("Sending failed!");
-		report_get_last_error();
+		const last_error err = get_last_error();
+		on_log("Sending failed [Error code: " + std::to_string(err.error_code) + "]!");
 		return { "", false };
 	}
 
@@ -53,7 +55,7 @@ bool rconpp::rcon_client::connect_to_server() {
 #ifdef _WIN32
 	// Initialize Winsock
 	WSADATA wsa_data;
-	int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+	const int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
 	if (result != 0) {
 		on_log("WSAStartup failed. Error: " + std::to_string(result));
 		return false;
@@ -63,13 +65,9 @@ bool rconpp::rcon_client::connect_to_server() {
 	// Create new TCP socket.
 	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-#ifdef _WIN32
 	if (sock == INVALID_SOCKET) {
-#else
-	if (sock == -1) {
-#endif
-		on_log("Failed to open socket.");
-		report_get_last_error();
+		const last_error err = get_last_error();
+		on_log("Failed to open socket [Error code: " + std::to_string(err.error_code) + "]!");
 		return false;
 	}
 
@@ -103,8 +101,7 @@ bool rconpp::rcon_client::connect_to_server() {
 	// Connect to the socket and set the status of the connection.
 	int status = connect(sock, (struct sockaddr*)&server, sizeof(server));
 
-	if (status == -1) {
-		report_get_last_error();
+	if (status == SOCKET_ERROR) {
 		return false;
 	}
 

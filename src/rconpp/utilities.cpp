@@ -1,11 +1,8 @@
 #include "utilities.h"
 
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
-#include <cstring>
+#include <iostream>
 
-rconpp::packet rconpp::form_packet(const std::string_view data, int32_t id, int32_t type) {
+rconpp::packet rconpp::form_packet(const std::string_view data, const int32_t id, const int32_t type) {
 	const int32_t data_size = static_cast<int32_t>(data.size()) + MIN_PACKET_SIZE;
 
 	if (data_size > 4096) {
@@ -36,43 +33,44 @@ int rconpp::type_to_int(const std::vector<char>& buffer) {
 	return static_cast<int>(buffer[4] | buffer[5] << 8 | buffer[6] << 16 | buffer[7] << 24);
 }
 
-rconpp::error_type rconpp::report_get_last_error() {
-	error_type current_error;
+rconpp::last_error rconpp::get_last_error() {
+	error_type last_error_type;
 
-	int last_error{-1};
+	int last_error_num{-1};
 
 #ifdef _WIN32
-	last_error = WSAGetLastError();
+	last_error_num = WSAGetLastError();
 #else
 	last_error = errno;
 #endif
 
-	std::cout << "Error code: " << last_error << "\n";
-
 #ifdef _WIN32
-	switch (last_error) {
+	switch (last_error_num) {
 		default:
 		case WSAECONNRESET:
-			current_error = DISCONNECTED;
+			last_error_type = DISCONNECTED;
 			break;
 		case WSAEINTR:
-			current_error = SHUTTING_DOWN;
+			last_error_type = SHUTTING_DOWN;
 			break;
 	}
 #else
-	switch (last_error) {
+	switch (last_error_num) {
 		default:
 		case 32:
 		case 104:
-			current_error = DISCONNECTED;
+			last_error_type = DISCONNECTED;
 			break;
 	}
 #endif
 
-	return current_error;
+	last_error error{};
+	error.type_of_error = last_error_type;
+	error.error_code = last_error_num;
+	return error;
 }
 
-int rconpp::read_packet_size(int socket) {
+int rconpp::read_packet_size(const SOCKET_TYPE socket) {
 	std::vector<char> buffer{};
 	buffer.resize(4);
 
@@ -81,7 +79,6 @@ int rconpp::read_packet_size(int socket) {
 	 * We simply just want to read that and then return it.
 	 */
 	if (recv(socket, buffer.data(), 4, MSG_NOSIGNAL) == -1) {
-		report_get_last_error();
 		return -1;
 	}
 

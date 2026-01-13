@@ -54,8 +54,8 @@ bool rconpp::rcon_server::startup_server() {
 #else
 	if (sock == -1) {
 #endif
-		on_log("Failed to open socket.");
-		report_get_last_error();
+		const last_error err = get_last_error();
+		on_log("Failed to open socket [Error code: " + std::to_string(err.error_code) + "]!");
 		return false;
 	}
 
@@ -73,21 +73,19 @@ bool rconpp::rcon_server::startup_server() {
 	int status = bind(sock, reinterpret_cast<const sockaddr*>(&server), sizeof(server));
 
 	if (status == -1) {
-		report_get_last_error();
 		return false;
 	}
 
 	status = listen(sock, SOMAXCONN);
 
 	if (status == -1) {
-		report_get_last_error();
 		return false;
 	}
 
 	return true;
 }
 
-void rconpp::rcon_server::disconnect_client(const int client_socket, const bool remove_after /*= true*/) {
+void rconpp::rcon_server::disconnect_client(const SOCKET_TYPE client_socket, const bool remove_after /*= true*/) {
 
 #ifdef _WIN32
 	closesocket(client_socket);
@@ -130,8 +128,8 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 	buffer.resize(packet_size);
 
 	if (recv(client.socket, buffer.data(), packet_size, MSG_NOSIGNAL) == -1) {
-		on_log("Failed to get a packet from client.");
-		report_get_last_error();
+		const last_error err = get_last_error();
+		on_log("Failed to get a packet from client [Error code: " + std::to_string(err.error_code) + "]!");
 		return;
 	}
 
@@ -187,8 +185,8 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 	on_log("Sending packet (of size: " + std::to_string(packet_to_send.length) + ") to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]");
 
 	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, MSG_NOSIGNAL) < 0) {
-		on_log("Sending failed!");
-		report_get_last_error();
+		const last_error err = get_last_error();
+		on_log("Sending failed [Error code: " + std::to_string(err.error_code) + "]!");
 		return;
 	}
 }
@@ -198,8 +196,8 @@ bool rconpp::rcon_server::send_heartbeat(connected_client& client) {
 
 	packet packet_to_send = form_packet("", -1, SERVERDATA_RESPONSE_VALUE);
 	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, MSG_NOSIGNAL) < 0) {
-		on_log("Failed to send a heartbeat to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]");
-		report_get_last_error();
+		const last_error err = get_last_error();
+		on_log("Failed to send a heartbeat to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] [Error code: " + std::to_string(err.error_code) + "]!");
 		return false;
 	}
 
@@ -236,11 +234,11 @@ void rconpp::rcon_server::start(bool return_after) {
 			sockaddr_in client_info{};
 
 			socklen_t client_len = sizeof(client_info);
-			int client_socket = accept(sock, reinterpret_cast<sockaddr*>(&client_info), &client_len);
+			SOCKET_TYPE client_socket = accept(sock, reinterpret_cast<sockaddr*>(&client_info), &client_len);
 
-			if (client_socket == -1) {
-				on_log("client with socket: \"" + std::to_string(client_socket) + "\" failed to connect.");
-				report_get_last_error();
+			if (client_socket == INVALID_SOCKET) {
+				const last_error err = get_last_error();
+				on_log("A new client attempted to join but failed [Error code: " + std::to_string(err.error_code) + "]!");
 				continue;
 			}
 
@@ -252,8 +250,9 @@ void rconpp::rcon_server::start(bool return_after) {
 			client.socket = client_socket;
 			client.connected = true;
 
+			// It is rather inefficient to be spinning up a thread per client. The best way to do it is probably spinning up a thread per ~100 clients or something
 			std::thread client_thread([this, &client]{
-				while (client.connected) {
+				while (client.connected && !client.pending_disconnect) {
 					read_packet(client);
 
 					const time_t current_time = time(nullptr);
@@ -262,14 +261,10 @@ void rconpp::rcon_server::start(bool return_after) {
 						if (client.last_heartbeat == 0 || current_time - client.last_heartbeat >= HEARTBEAT_TIME)
 						{
 							if (!send_heartbeat(client)) {
-								client.force_disconnect = true;
+								client.pending_disconnect = true;
+								disconnect_client(client.socket);
 							}
 						}
-					}
-
-					if (client.force_disconnect) {
-						disconnect_client(client.socket);
-						return;
 					}
 
 					// No need to let the server keep running this causing 100% usage on a thread, we can wait a bit between requests.
