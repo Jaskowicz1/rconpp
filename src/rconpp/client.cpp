@@ -155,7 +155,7 @@ rconpp::packet rconpp::rcon_client::read_packet() {
 	}
 
 	packet temp_packet{};
-	temp_packet.length = packet_size + 4;
+	temp_packet.length = packet_size + PACKET_SIZE_BYTES;
 
 	if (packet_size > 0) {
 		temp_packet.size = packet_size;

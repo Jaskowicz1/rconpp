@@ -6,20 +6,20 @@
 rconpp::packet rconpp::form_packet(const std::string_view data, const int32_t id, const int32_t type) {
 	const int32_t data_size = static_cast<int32_t>(data.size()) + MIN_PACKET_SIZE;
 
-	if (data_size > 4096) {
+	if (data_size > MAX_PACKET_SIZE) {
 		std::cout << "This packet is too big to send. Please generate a smaller packet." << "\n";
 		return {};
 	}
 
-	std::vector<char> temp_data(data_size + 4); /* Create a vector that exactly the size of the packet length. */
+	std::vector<char> temp_data(data_size + PACKET_SIZE_BYTES); // Create a vector that exactly the size of the packet length.
 
-	std::memcpy(temp_data.data() + 0, &data_size, sizeof(data_size)); /* Copy size into it */
-	std::memcpy(temp_data.data() + sizeof(data_size), &id, sizeof(id)); /* Copy id into it */
-	std::memcpy(temp_data.data() + sizeof(data_size) + sizeof(id), &type, sizeof(type)); /* Copy type into it */
-	std::memcpy(temp_data.data() + sizeof(data_size) + sizeof(id) + sizeof(type), data.data(), data.size()); /* Copy data into it */
+	std::memcpy(temp_data.data() + 0, &data_size, sizeof(data_size)); // Copy size into it
+	std::memcpy(temp_data.data() + sizeof(data_size), &id, sizeof(id)); // Copy id into it
+	std::memcpy(temp_data.data() + sizeof(data_size) + sizeof(id), &type, sizeof(type)); // Copy type into it
+	std::memcpy(temp_data.data() + sizeof(data_size) + sizeof(id) + sizeof(type), data.data(), data.size()); // Copy data into it
 
 	packet temp_packet;
-	temp_packet.length = data_size + 4;
+	temp_packet.length = data_size + PACKET_SIZE_BYTES;
 	temp_packet.size = data_size;
 	temp_packet.data = temp_data;
 
@@ -73,13 +73,13 @@ rconpp::last_error rconpp::get_last_error() {
 
 int rconpp::read_packet_size(const SOCKET_TYPE socket) {
 	std::vector<char> buffer{};
-	buffer.resize(4);
+	buffer.resize(PACKET_SIZE_BYTES);
 
 	/*
 	 * RCON gives the packet SIZE in the first four (4) bytes of each packet.
 	 * We simply just want to read that and then return it.
 	 */
-	if (recv(socket, buffer.data(), 4, MSG_NOSIGNAL) == -1) {
+	if (recv(socket, buffer.data(), PACKET_SIZE_BYTES, MSG_NOSIGNAL) == -1) {
 		return -1;
 	}
 

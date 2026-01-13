@@ -29,8 +29,6 @@ struct connected_client {
 
 	bool authenticated{false};
 
-	bool pending_disconnect{false};
-
 	time_t last_heartbeat{0};
 };
 
@@ -47,7 +45,9 @@ class RCONPP_EXPORT rcon_server {
 	SOCKET_TYPE sock{INVALID_SOCKET};
 
 	std::thread accept_connections_runner;
+
 	std::mutex connected_clients_mutex;
+	std::mutex request_handlers_mutex;
 
 public:
 	bool online{false};
@@ -118,6 +118,8 @@ private:
 	 * @returns bool, true is heartbeat was sent, otherwise false.
 	 */
 	bool send_heartbeat(connected_client& client);
+
+	void client_process_loop(connected_client& client);
 };
 
 } // namespace rconpp

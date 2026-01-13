@@ -17,11 +17,16 @@
 
 namespace rconpp {
 
+// Connection constants.
 constexpr int DEFAULT_TIMEOUT = 4; // In Seconds.
+constexpr int MAX_RETRIES_TO_RECEIVE_INFO = 5;
+constexpr int HEARTBEAT_TIME = 30;
+
+// Packet constants.
 constexpr int MIN_PACKET_SIZE = 10;
 constexpr int MIN_PACKET_LENGTH = 14;
-constexpr int MAX_RETRIES_TO_RECEIVE_INFO = 500;
-constexpr int HEARTBEAT_TIME = 30;
+constexpr int MAX_PACKET_SIZE = 4096;
+constexpr int PACKET_SIZE_BYTES = 4; // The first x bytes of the packet to read for the packet size (usually the first 4 bytes)
 
 // Used for send/recv calls, as `signal(SIGPIPE, SIG_IGN);` seems to be ignored.
 #ifndef MSG_NOSIGNAL

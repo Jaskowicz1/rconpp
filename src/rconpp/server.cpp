@@ -105,6 +105,8 @@ void rconpp::rcon_server::disconnect_client(const SOCKET_TYPE client_socket, con
 	client.connected = false;
 	client.authenticated = false;
 
+	std::lock_guard request_guard(request_handlers_mutex);
+
 	if (request_handlers.at(client_socket).joinable()) {
 		request_handlers.at(client_socket).join();
 	}
@@ -113,13 +115,26 @@ void rconpp::rcon_server::disconnect_client(const SOCKET_TYPE client_socket, con
 
 	if (remove_after) {
 		connected_clients.erase(client_socket);
+		request_handlers.erase(client_socket);
 	}
 }
 
 void rconpp::rcon_server::read_packet(connected_client& client) {
 	const int packet_size = read_packet_size(client.socket);
 
-	// Silently ignore packet size.
+	if (packet_size == -1) {
+		const last_error err = get_last_error();
+		on_log("Failed to get a packet from client [Error code: " + std::to_string(err.error_code) + "]!");
+
+		// Since the client looks to have disconnected, we need to check their heartbeat immediately.
+		if (err.type_of_error == DISCONNECTED) {
+			client.last_heartbeat = 0;
+		}
+		return;
+	}
+
+	// Silently ignore packet sizes bigger than -1 but smaller than MIN_PACKET_SIZE,
+	// which indicates it's a valid packet but not a valid size.
 	if (packet_size < MIN_PACKET_SIZE) {
 		return;
 	}
@@ -130,6 +145,11 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 	if (recv(client.socket, buffer.data(), packet_size, MSG_NOSIGNAL) == -1) {
 		const last_error err = get_last_error();
 		on_log("Failed to get a packet from client [Error code: " + std::to_string(err.error_code) + "]!");
+
+		// Since the client looks to have disconnected, we need to check their heartbeat immediately.
+		if (err.type_of_error == DISCONNECTED) {
+			client.last_heartbeat = 0;
+		}
 		return;
 	}
 
@@ -187,7 +207,11 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, MSG_NOSIGNAL) < 0) {
 		const last_error err = get_last_error();
 		on_log("Sending failed [Error code: " + std::to_string(err.error_code) + "]!");
-		return;
+
+		// Since the client looks to have disconnected, we need to check their heartbeat immediately.
+		if (err.type_of_error == DISCONNECTED) {
+			client.last_heartbeat = 0;
+		}
 	}
 }
 
@@ -204,6 +228,26 @@ bool rconpp::rcon_server::send_heartbeat(connected_client& client) {
 	client.last_heartbeat = time(nullptr);
 
 	return true;
+}
+
+void rconpp::rcon_server::client_process_loop(connected_client &client) {
+	while (client.connected) {
+		read_packet(client);
+
+		const time_t current_time = time(nullptr);
+
+		if (client.authenticated) {
+			if (client.last_heartbeat == 0 || current_time - client.last_heartbeat >= HEARTBEAT_TIME) {
+				if (!send_heartbeat(client)) {
+					on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] is now being disconnected.");
+					disconnect_client(client.socket);
+				}
+			}
+		}
+
+		// No need to let the server keep running this causing 100% usage on a thread, we can wait a bit between requests.
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
 }
 
 void rconpp::rcon_server::start(bool return_after) {
@@ -250,36 +294,15 @@ void rconpp::rcon_server::start(bool return_after) {
 			client.socket = client_socket;
 			client.connected = true;
 
-			// It is rather inefficient to be spinning up a thread per client. The best way to do it is probably spinning up a thread per ~100 clients or something
-			std::thread client_thread([this, &client]{
-				while (client.connected && !client.pending_disconnect) {
-					read_packet(client);
+			std::thread client_thread(&rcon_server::client_process_loop, this, std::ref(client));
 
-					const time_t current_time = time(nullptr);
-
-					if (client.authenticated) {
-						if (client.last_heartbeat == 0 || current_time - client.last_heartbeat >= HEARTBEAT_TIME)
-						{
-							if (!send_heartbeat(client)) {
-								client.pending_disconnect = true;
-							}
-						}
-					}
-
-					if (client.pending_disconnect) {
-						disconnect_client(client.socket);
-					}
-
-					// No need to let the server keep running this causing 100% usage on a thread, we can wait a bit between requests.
-					std::this_thread::sleep_for(std::chrono::milliseconds(100));
-				}
-			});
+			std::lock_guard request_guard(request_handlers_mutex);
 
 			request_handlers.insert({ client_socket, std::move(client_thread) });
 
 			request_handlers.at(client_socket).detach();
 
-			std::lock_guard guard(connected_clients_mutex);
+			std::lock_guard clients_guard(connected_clients_mutex);
 
 			connected_clients.insert({ client_socket, client });
 		}
