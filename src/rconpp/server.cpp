@@ -107,11 +107,17 @@ void rconpp::rcon_server::disconnect_client(const SOCKET_TYPE client_socket, con
 	on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has been disconnected from the server.");
 
 	if (remove_after) {
-		std::lock_guard guard(connected_clients_mutex);
-		connected_clients.erase(client_socket);
+		{
+			std::unique_lock requests_lock(request_handlers_mutex);
+			request_handlers_cv.wait(requests_lock);
 
-		std::lock_guard request_guard(request_handlers_mutex);
-		request_handlers.erase(client_socket);
+			request_handlers.erase(client_socket);
+
+			requests_lock.unlock();
+			request_handlers_cv.notify_one();
+		}
+
+		remove_client(client_socket);
 	}
 }
 
@@ -294,15 +300,19 @@ void rconpp::rcon_server::start(bool return_after) {
 
 			std::thread client_thread(&rcon_server::client_process_loop, this, std::ref(client));
 
-			std::lock_guard request_guard(request_handlers_mutex);
+			client_thread.detach();
 
-			request_handlers.insert({ client_socket, std::move(client_thread) });
+			{
+				std::unique_lock requests_lock(request_handlers_mutex);
+				request_handlers_cv.wait(requests_lock);
 
-			request_handlers.at(client_socket).detach();
+				request_handlers.insert({ client_socket, std::move(client_thread) });
 
-			std::lock_guard clients_guard(connected_clients_mutex);
+				requests_lock.unlock();
+				request_handlers_cv.notify_one();
+			}
 
-			connected_clients.insert({ client_socket, client });
+			add_client(client_socket, client);
 		}
 	});
 
