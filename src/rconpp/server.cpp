@@ -232,7 +232,7 @@ bool rconpp::rcon_server::send_heartbeat(connected_client& client) {
 	return true;
 }
 
-void rconpp::rcon_server::client_process_loop(connected_client &client) {
+void rconpp::rcon_server::client_process_loop(connected_client& client) {
 	while (client.connected) {
 		read_packet(client);
 
@@ -241,7 +241,7 @@ void rconpp::rcon_server::client_process_loop(connected_client &client) {
 		if (client.authenticated) {
 			if (client.last_heartbeat == 0 || current_time - client.last_heartbeat >= HEARTBEAT_TIME) {
 				if (!send_heartbeat(client)) {
-					on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] is now being disconnected.");
+					on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + " | Socket: " + std::to_string(client.socket) + "] is now being disconnected.");
 					disconnect_client(client.socket);
 					// disconnect_client should do this, but we'll do it too.
 					client.connected = false;
@@ -290,7 +290,7 @@ void rconpp::rcon_server::start(bool return_after) {
 				continue;
 			}
 
-			on_log("Client [" + std::string(inet_ntoa(client_info.sin_addr)) + ":" + std::to_string(ntohs(client_info.sin_port)) + "] has connected to the server, asking for authentication.");
+			on_log("Client [" + std::string(inet_ntoa(client_info.sin_addr)) + ":" + std::to_string(ntohs(client_info.sin_port)) + " | Socket: " + std::to_string(client_socket) + "] is connecting to the server.");
 
 			connected_client client{};
 
@@ -300,19 +300,19 @@ void rconpp::rcon_server::start(bool return_after) {
 
 			std::thread client_thread(&rcon_server::client_process_loop, this, std::ref(client));
 
-			client_thread.detach();
+			std::unique_lock requests_lock(request_handlers_mutex);
+			request_handlers_cv.wait(requests_lock);
 
-			{
-				std::unique_lock requests_lock(request_handlers_mutex);
-				request_handlers_cv.wait(requests_lock);
+			request_handlers.insert({ client_socket, std::move(client_thread) });
 
-				request_handlers.insert({ client_socket, std::move(client_thread) });
+			request_handlers.at(client_socket).detach();
 
-				requests_lock.unlock();
-				request_handlers_cv.notify_one();
-			}
+			requests_lock.unlock();
+			request_handlers_cv.notify_one();
 
 			add_client(client_socket, client);
+
+			on_log("Client [" + std::string(inet_ntoa(client_info.sin_addr)) + ":" + std::to_string(ntohs(client_info.sin_port)) + " | Socket: " + std::to_string(client_socket) + "] has successfully connected to the server, asking for authentication.");
 		}
 	});
 
