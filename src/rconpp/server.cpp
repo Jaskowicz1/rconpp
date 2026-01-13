@@ -93,10 +93,9 @@ void rconpp::rcon_server::disconnect_client(const SOCKET_TYPE client_socket, con
 	close(client_socket);
 #endif
 
-	std::lock_guard guard(connected_clients_mutex);
-
 	if (connected_clients.find(client_socket) == connected_clients.end())
 	{
+		on_log("Client [Socket: " + std::to_string(client_socket) + "] does not appear to be a connected client.");
 		return;
 	}
 
@@ -105,16 +104,13 @@ void rconpp::rcon_server::disconnect_client(const SOCKET_TYPE client_socket, con
 	client.connected = false;
 	client.authenticated = false;
 
-	std::lock_guard request_guard(request_handlers_mutex);
-
-	if (request_handlers.at(client_socket).joinable()) {
-		request_handlers.at(client_socket).join();
-	}
-
 	on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has been disconnected from the server.");
 
 	if (remove_after) {
+		std::lock_guard guard(connected_clients_mutex);
 		connected_clients.erase(client_socket);
+
+		std::lock_guard request_guard(request_handlers_mutex);
 		request_handlers.erase(client_socket);
 	}
 }
@@ -241,6 +237,8 @@ void rconpp::rcon_server::client_process_loop(connected_client &client) {
 				if (!send_heartbeat(client)) {
 					on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] is now being disconnected.");
 					disconnect_client(client.socket);
+					// disconnect_client should do this, but we'll do it too.
+					client.connected = false;
 				}
 			}
 		}
