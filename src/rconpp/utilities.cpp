@@ -1,6 +1,7 @@
 #include "utilities.h"
 
 #include <iostream>
+#include <cstring>
 
 rconpp::packet rconpp::form_packet(const std::string_view data, const int32_t id, const int32_t type) {
 	const int32_t data_size = static_cast<int32_t>(data.size()) + MIN_PACKET_SIZE;
@@ -41,7 +42,7 @@ rconpp::last_error rconpp::get_last_error() {
 #ifdef _WIN32
 	last_error_num = WSAGetLastError();
 #else
-	last_error = errno;
+	last_error_num = errno;
 #endif
 
 #ifdef _WIN32

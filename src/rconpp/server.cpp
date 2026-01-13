@@ -262,9 +262,12 @@ void rconpp::rcon_server::start(bool return_after) {
 						{
 							if (!send_heartbeat(client)) {
 								client.pending_disconnect = true;
-								disconnect_client(client.socket);
 							}
 						}
+					}
+
+					if (client.pending_disconnect) {
+						disconnect_client(client.socket);
 					}
 
 					// No need to let the server keep running this causing 100% usage on a thread, we can wait a bit between requests.
