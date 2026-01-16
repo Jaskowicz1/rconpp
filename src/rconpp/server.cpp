@@ -54,8 +54,8 @@ bool rconpp::rcon_server::startup_server() {
 #else
 	if (sock == -1) {
 #endif
-		on_log("Failed to open socket.");
-		report_error();
+		const last_error err = get_last_error();
+		on_log("Failed to open socket [Error code: " + std::to_string(err.error_code) + "]!");
 		return false;
 	}
 
@@ -73,21 +73,19 @@ bool rconpp::rcon_server::startup_server() {
 	int status = bind(sock, reinterpret_cast<const sockaddr*>(&server), sizeof(server));
 
 	if (status == -1) {
-		report_error();
 		return false;
 	}
 
 	status = listen(sock, SOMAXCONN);
 
 	if (status == -1) {
-		report_error();
 		return false;
 	}
 
 	return true;
 }
 
-void rconpp::rcon_server::disconnect_client(const int client_socket, const bool remove_after /*= true*/) {
+void rconpp::rcon_server::disconnect_client(const SOCKET_TYPE client_socket, const bool remove_after /*= true*/) {
 
 #ifdef _WIN32
 	closesocket(client_socket);
@@ -95,10 +93,9 @@ void rconpp::rcon_server::disconnect_client(const int client_socket, const bool 
 	close(client_socket);
 #endif
 
-	std::lock_guard guard(connected_clients_mutex);
-
 	if (connected_clients.find(client_socket) == connected_clients.end())
 	{
+		on_log("Client [Socket: " + std::to_string(client_socket) + "] does not appear to be a connected client.");
 		return;
 	}
 
@@ -106,22 +103,40 @@ void rconpp::rcon_server::disconnect_client(const int client_socket, const bool 
 
 	client.connected = false;
 	client.authenticated = false;
-
-	if (request_handlers.at(client_socket).joinable()) {
-		request_handlers.at(client_socket).join();
-	}
-
-	on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has been disconnected from the server.");
+	
+	on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + " | Socket: " + std::to_string(client_socket) + "] has been disconnected from the server.");
 
 	if (remove_after) {
-		connected_clients.erase(client_socket);
+		{
+			while (!request_handlers_mutex.try_lock()) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			}
+
+			request_handlers.erase(client_socket);
+
+			request_handlers_mutex.unlock();
+		}
+
+		remove_client(client_socket);
 	}
 }
 
 void rconpp::rcon_server::read_packet(connected_client& client) {
-	const int packet_size = read_packet_size(static_cast<int>(client.socket));
+	const int packet_size = read_packet_size(client.socket);
 
-	// Silently ignore packet size.
+	if (packet_size == -1) {
+		const last_error err = get_last_error();
+		on_log("Failed to get a packet from client [Error code: " + std::to_string(err.error_code) + "]!");
+
+		// Since the client looks to have disconnected, we need to check their heartbeat immediately.
+		if (err.type_of_error == DISCONNECTED) {
+			client.last_heartbeat = 0;
+		}
+		return;
+	}
+
+	// Silently ignore packet sizes bigger than -1 but smaller than MIN_PACKET_SIZE,
+	// which indicates it's a valid packet but not a valid size.
 	if (packet_size < MIN_PACKET_SIZE) {
 		return;
 	}
@@ -129,9 +144,14 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 	std::vector<char> buffer{};
 	buffer.resize(packet_size);
 
-	if (recv(client.socket, buffer.data(), packet_size, 0) == -1) {
-		on_log("Failed to get a packet from client.");
-		report_error();
+	if (recv(client.socket, buffer.data(), packet_size, MSG_NOSIGNAL) == -1) {
+		const last_error err = get_last_error();
+		on_log("Failed to get a packet from client [Error code: " + std::to_string(err.error_code) + "]!");
+
+		// Since the client looks to have disconnected, we need to check their heartbeat immediately.
+		if (err.type_of_error == DISCONNECTED) {
+			client.last_heartbeat = 0;
+		}
 		return;
 	}
 
@@ -149,8 +169,10 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 		if (packet_data == password) {
 			packet_to_send = form_packet("", id, SERVERDATA_AUTH_RESPONSE);
 			client.authenticated = true;
+			on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has authenticated successfully!");
 		} else {
 			packet_to_send = form_packet("", -1, SERVERDATA_AUTH_RESPONSE);
+			on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] failed authentication!");
 		}
 	} else {
 		if (type != SERVERDATA_EXECCOMMAND) {
@@ -184,10 +206,14 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 
 	on_log("Sending packet (of size: " + std::to_string(packet_to_send.length) + ") to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]");
 
-	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, 0) < 0) {
-		on_log("Sending failed!");
-		report_error();
-		return;
+	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, MSG_NOSIGNAL) < 0) {
+		const last_error err = get_last_error();
+		on_log("Sending failed [Error code: " + std::to_string(err.error_code) + "]!");
+
+		// Since the client looks to have disconnected, we need to check their heartbeat immediately.
+		if (err.type_of_error == DISCONNECTED) {
+			client.last_heartbeat = 0;
+		}
 	}
 }
 
@@ -195,15 +221,37 @@ bool rconpp::rcon_server::send_heartbeat(connected_client& client) {
 	on_log("Sending heartbeat to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]");
 
 	packet packet_to_send = form_packet("", -1, SERVERDATA_RESPONSE_VALUE);
-	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, 0) < 0) {
-		on_log("Failed to send a heartbeat to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]");
-		report_error();
+	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, MSG_NOSIGNAL) < 0) {
+		const last_error err = get_last_error();
+		on_log("Failed to send a heartbeat to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] [Error code: " + std::to_string(err.error_code) + "]!");
 		return false;
 	}
 
 	client.last_heartbeat = time(nullptr);
 
 	return true;
+}
+
+void rconpp::rcon_server::client_process_loop(connected_client& client) {
+	while (client.connected) {
+		read_packet(client);
+
+		const time_t current_time = time(nullptr);
+
+		if (client.authenticated) {
+			if (client.last_heartbeat == 0 || current_time - client.last_heartbeat >= HEARTBEAT_TIME) {
+				if (!send_heartbeat(client)) {
+					on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + " | Socket: " + std::to_string(client.socket) + "] is now being disconnected.");
+					disconnect_client(client.socket);
+					// disconnect_client should do this, but we'll do it too.
+					client.connected = false;
+				}
+			}
+		}
+
+		// No need to let the server keep running this causing 100% usage on a thread, we can wait a bit between requests.
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
 }
 
 void rconpp::rcon_server::start(bool return_after) {
@@ -234,15 +282,15 @@ void rconpp::rcon_server::start(bool return_after) {
 			sockaddr_in client_info{};
 
 			socklen_t client_len = sizeof(client_info);
-			int client_socket = accept(sock, reinterpret_cast<sockaddr*>(&client_info), &client_len);
+			SOCKET_TYPE client_socket = accept(sock, reinterpret_cast<sockaddr*>(&client_info), &client_len);
 
-			if (client_socket == -1) {
-				on_log("client with socket: \"" + std::to_string(client_socket) + "\" failed to connect.");
-				report_error();
+			if (client_socket == INVALID_SOCKET) {
+				const last_error err = get_last_error();
+				on_log("A new client attempted to join but failed [Error code: " + std::to_string(err.error_code) + "]!");
 				continue;
 			}
 
-			on_log("Client [" + std::string(inet_ntoa(client_info.sin_addr)) + ":" + std::to_string(ntohs(client_info.sin_port)) + "] has connected to the server.");
+			on_log("Client [" + std::string(inet_ntoa(client_info.sin_addr)) + ":" + std::to_string(ntohs(client_info.sin_port)) + " | Socket: " + std::to_string(client_socket) + "] is connecting to the server.");
 
 			connected_client client{};
 
@@ -250,34 +298,21 @@ void rconpp::rcon_server::start(bool return_after) {
 			client.socket = client_socket;
 			client.connected = true;
 
-			std::thread client_thread([this, &client]{
-				while (client.connected) {
-					read_packet(client);
+			add_client(client_socket, client);
 
-					const time_t current_time = time(nullptr);
+			std::thread client_thread(&rcon_server::client_process_loop, this, std::ref(connected_clients.at(client_socket)));
 
-					if (client.authenticated) {
-						if (client.last_heartbeat == 0 || current_time - client.last_heartbeat >= HEARTBEAT_TIME)
-						{
-							if (!send_heartbeat(client)) {
-								disconnect_client(client.socket);
-								return;
-							}
-						}
-					}
-
-					// No need to let the server keep running this causing 100% usage on a thread, we can wait a bit between requests.
-					std::this_thread::sleep_for(std::chrono::milliseconds(100));
-				}
-			});
+			while (!request_handlers_mutex.try_lock()) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			}
 
 			request_handlers.insert({ client_socket, std::move(client_thread) });
 
 			request_handlers.at(client_socket).detach();
 
-			std::lock_guard guard(connected_clients_mutex);
+			request_handlers_mutex.unlock();
 
-			connected_clients.insert({ client_socket, client });
+			on_log("Client [" + std::string(inet_ntoa(client_info.sin_addr)) + ":" + std::to_string(ntohs(client_info.sin_port)) + " | Socket: " + std::to_string(client_socket) + "] has successfully connected to the server, asking for authentication.");
 		}
 	});
 

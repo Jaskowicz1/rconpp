@@ -24,7 +24,7 @@ namespace rconpp {
 
 struct connected_client {
 	sockaddr_in sock_info{};
-	int socket{0};
+	SOCKET_TYPE socket{0};
 	bool connected{false};
 
 	bool authenticated{false};
@@ -42,14 +42,12 @@ class RCONPP_EXPORT rcon_server {
 	int port{0};
 	std::string password{};
 
-#ifdef _WIN32
-	SOCKET sock{INVALID_SOCKET};
-#else
-	int sock{0};
-#endif
+	SOCKET_TYPE sock{INVALID_SOCKET};
 
 	std::thread accept_connections_runner;
+
 	std::mutex connected_clients_mutex;
+	std::mutex request_handlers_mutex;
 
 public:
 	bool online{false};
@@ -61,11 +59,14 @@ public:
 	std::condition_variable terminating;
 
 	/**
-	 * @brief A map of connected clients. The key is their socket to talk to.
+	 * @brief A map of connected clients. The key is their socket.
 	 */
-	std::unordered_map<int, connected_client> connected_clients{};
+	std::unordered_map<SOCKET_TYPE, connected_client> connected_clients{};
 
-	std::unordered_map<int, std::thread> request_handlers{};
+	/**
+	 * @brief A map of request_handlers (the thread for a client that handles all requests a client will send). The key is their socket.
+	 */
+	std::unordered_map<SOCKET_TYPE, std::thread> request_handlers{};
 
 	/**
 	 * @brief rcon_server constuctor. Initiates a connection to an RCON server with the parameters given.
@@ -77,7 +78,7 @@ public:
 	 * @note This is a blocking call (done on purpose). It needs to wait to connect to the RCON server before anything else happens.
 	 * It will timeout after 4 seconds if it can't connect.
 	 */
-	rcon_server(const std::string_view addr, const int _port, const std::string_view pass);
+	rcon_server(std::string_view addr, int _port, std::string_view pass);
 
 	~rcon_server();
 
@@ -89,7 +90,7 @@ public:
 	 * @param client_socket The socket of the client to disconnect.
 	 * @param remove_after Should remove client from connected_clients after?
 	 */
-	void disconnect_client(int client_socket, bool remove_after = true);
+	void disconnect_client(SOCKET_TYPE client_socket, bool remove_after = true);
 
 private:
 
@@ -117,6 +118,28 @@ private:
 	 * @returns bool, true is heartbeat was sent, otherwise false.
 	 */
 	bool send_heartbeat(connected_client& client);
+
+	void client_process_loop(connected_client& client);
+
+	void add_client(const SOCKET_TYPE client_socket, connected_client& client) {
+		while (!connected_clients_mutex.try_lock()) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
+
+		connected_clients.insert({ client_socket, client });
+
+		connected_clients_mutex.unlock();
+	}
+
+	void remove_client(const SOCKET_TYPE client_socket) {
+		while (!connected_clients_mutex.try_lock()) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
+
+		connected_clients.erase(client_socket);
+
+		connected_clients_mutex.unlock();
+	};
 };
 
 } // namespace rconpp

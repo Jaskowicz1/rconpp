@@ -9,6 +9,7 @@ rconpp::rcon_client::~rcon_client() {
 	if (on_log) {
 		on_log("RCON client is shutting down.");
 	}
+
 	// Set connected to false, meaning no requests can be attempted during shutdown.
 	connected = false;
 
@@ -20,6 +21,7 @@ rconpp::rcon_client::~rcon_client() {
 #else
 	close(sock);
 #endif
+
 	// Join the queue runner (if allowed), meaning we await its end before killing this object, preventing any corruption.
 	if (queue_runner.joinable()) {
 		queue_runner.join();
@@ -34,9 +36,9 @@ rconpp::response rconpp::rcon_client::send_data_sync(const std::string_view data
 
 	packet formed_packet = form_packet(data, id, type);
 
-	if (send(sock, formed_packet.data.data(), formed_packet.length, 0) < 0) {
-		on_log("Sending failed!");
-		report_error();
+	if (send(sock, formed_packet.data.data(), formed_packet.length, MSG_NOSIGNAL) < 0) {
+		const last_error err = get_last_error();
+		on_log("Sending failed [Error code: " + std::to_string(err.error_code) + "]!");
 		return { "", false };
 	}
 
@@ -53,7 +55,7 @@ bool rconpp::rcon_client::connect_to_server() {
 #ifdef _WIN32
 	// Initialize Winsock
 	WSADATA wsa_data;
-	int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+	const int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
 	if (result != 0) {
 		on_log("WSAStartup failed. Error: " + std::to_string(result));
 		return false;
@@ -63,13 +65,9 @@ bool rconpp::rcon_client::connect_to_server() {
 	// Create new TCP socket.
 	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-#ifdef _WIN32
 	if (sock == INVALID_SOCKET) {
-#else
-	if (sock == -1) {
-#endif
-		on_log("Failed to open socket.");
-		report_error();
+		const last_error err = get_last_error();
+		on_log("Failed to open socket [Error code: " + std::to_string(err.error_code) + "]!");
 		return false;
 	}
 
@@ -103,8 +101,7 @@ bool rconpp::rcon_client::connect_to_server() {
 	// Connect to the socket and set the status of the connection.
 	int status = connect(sock, (struct sockaddr*)&server, sizeof(server));
 
-	if (status == -1) {
-		report_error();
+	if (status == SOCKET_ERROR) {
 		return false;
 	}
 
@@ -158,7 +155,7 @@ rconpp::packet rconpp::rcon_client::read_packet() {
 	}
 
 	packet temp_packet{};
-	temp_packet.length = packet_size + 4;
+	temp_packet.length = packet_size + PACKET_SIZE_BYTES;
 
 	if (packet_size > 0) {
 		temp_packet.size = packet_size;
@@ -178,7 +175,7 @@ rconpp::packet rconpp::rcon_client::read_packet() {
 	 * Receiving by the length of the packet will give us 4 extra bytes, so, we do by size here.
 	 * This is because read_packet_size() reads the first 4 bytes and discards them.
 	 */
-	recv(sock, buffer.data(), temp_packet.size, 0);
+	recv(sock, buffer.data(), temp_packet.size, MSG_NOSIGNAL);
 
 	temp_packet.data = buffer;
 

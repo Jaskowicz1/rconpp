@@ -34,11 +34,7 @@ class RCONPP_EXPORT rcon_client {
 	const std::string address{};
 	const int port{0};
 	const std::string password{};
-#ifdef _WIN32
-	SOCKET sock{INVALID_SOCKET};
-#else
-	int sock{0};
-#endif
+	SOCKET_TYPE sock{INVALID_SOCKET};
 
 	std::vector<queued_request> requests_queued{};
 
@@ -47,7 +43,7 @@ class RCONPP_EXPORT rcon_client {
 public:
 	std::atomic<bool> connected{false};
 
-	std::function<void(const std::string_view& log)> on_log;
+	std::function<void(const std::string_view& log)> on_log{};
 
 	std::condition_variable terminating;
 
@@ -61,7 +57,7 @@ public:
 	 * @note This is a blocking call (done on purpose). It needs to wait to connect to the RCON server before anything else happens.
 	 * It will timeout after 4 seconds if it can't connect.
 	 */
-	rcon_client(const std::string_view addr, const int _port, const std::string_view pass);
+	rcon_client(std::string_view addr, int _port, std::string_view pass);
 
 	~rcon_client();
 
@@ -93,7 +89,7 @@ public:
 	 *
 	 * @returns Data given by the server from the request.
 	 */
-	response send_data_sync(const std::string_view data, const int32_t id, data_type type, bool feedback = true);
+	response send_data_sync(std::string_view data, int32_t id, data_type type, bool feedback = true);
 
 private:
 
