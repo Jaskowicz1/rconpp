@@ -38,30 +38,37 @@ int main() {
 
 		server.start(true);
 
-		std::cout << "Waiting 1 second, then booting client..." << "\n";
+		std::cout << "Waiting 1 second, then booting 3 clients..." << "\n";
 		std::this_thread::sleep_for(std::chrono::seconds(1));
 
-		rconpp::rcon_client client("127.0.0.1", 27012, "testing");
+		for(int i=0; i < 3; i++)
+		{
+			rconpp::rcon_client client("127.0.0.1", 27012, "testing");
 
-		client.on_log = [](const std::string_view log) {
-			std::cout << "CLIENT: " << log << "\n";
-		};
+			client.on_log = [](const std::string_view log) {
+				std::cout << "CLIENT: " << log << "\n";
+			};
 
-		client.start(true);
+			client.start(true);
 
-		if (client.connected) {
-			std::cout << "Client connected! Sending test command..." << "\n";
-			rconpp::response res = client.send_data_sync("test", 3, rconpp::data_type::SERVERDATA_EXECCOMMAND);
+			if (client.connected) {
+				std::cout << "Client connected! Sending test command..." << "\n";
+				rconpp::response res = client.send_data_sync("test", 3, rconpp::data_type::SERVERDATA_EXECCOMMAND);
 
-			if (res.server_responded && res.data.find("Success") != std::string::npos) {
-				std::cout << "Server responded with Success, Full Server test passed!" << "\n";
+				if (res.server_responded && res.data.find("Success") != std::string::npos) {
+					std::cout << "Server responded with Success, Client " << std::to_string(i+1) << " passed!" << "\n";
+				} else {
+					std::cout << "Bad response received! Response from server was: " << res.data << "\n";
+					throw std::logic_error("No server response or bad response sent by server.");
+				}
 			} else {
-				std::cout << "Bad response received! Response from server was: " << res.data << "\n";
-				throw std::logic_error("No server response or bad response sent by server.");
+				throw std::logic_error("Failed to make a connection to the server.");
 			}
-		} else {
-			throw std::logic_error("Failed to make a connection to the server.");
+
+			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
+
+		std::cout << "All clients received a response, Full server test passed!" << "\n";
 	} catch(std::exception& e) {
 		std::cout << "Full Server test failed. Reason: " << e.what() << "\n";
 		return -1;

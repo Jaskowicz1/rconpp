@@ -108,13 +108,13 @@ void rconpp::rcon_server::disconnect_client(const SOCKET_TYPE client_socket, con
 
 	if (remove_after) {
 		{
-			std::unique_lock requests_lock(request_handlers_mutex);
-			request_handlers_cv.wait(requests_lock);
+			while (!request_handlers_mutex.try_lock()) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			}
 
 			request_handlers.erase(client_socket);
 
-			requests_lock.unlock();
-			request_handlers_cv.notify_one();
+			request_handlers_mutex.unlock();
 		}
 
 		remove_client(client_socket);
@@ -298,19 +298,19 @@ void rconpp::rcon_server::start(bool return_after) {
 			client.socket = client_socket;
 			client.connected = true;
 
-			std::thread client_thread(&rcon_server::client_process_loop, this, std::ref(client));
+			add_client(client_socket, client);
 
-			std::unique_lock requests_lock(request_handlers_mutex);
-			request_handlers_cv.wait(requests_lock);
+			std::thread client_thread(&rcon_server::client_process_loop, this, std::ref(connected_clients.at(client_socket)));
+
+			while (!request_handlers_mutex.try_lock()) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			}
 
 			request_handlers.insert({ client_socket, std::move(client_thread) });
 
 			request_handlers.at(client_socket).detach();
 
-			requests_lock.unlock();
-			request_handlers_cv.notify_one();
-
-			add_client(client_socket, client);
+			request_handlers_mutex.unlock();
 
 			on_log("Client [" + std::string(inet_ntoa(client_info.sin_addr)) + ":" + std::to_string(ntohs(client_info.sin_port)) + " | Socket: " + std::to_string(client_socket) + "] has successfully connected to the server, asking for authentication.");
 		}

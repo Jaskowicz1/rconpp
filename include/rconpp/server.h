@@ -47,9 +47,7 @@ class RCONPP_EXPORT rcon_server {
 	std::thread accept_connections_runner;
 
 	std::mutex connected_clients_mutex;
-	std::condition_variable connected_clients_cv;
 	std::mutex request_handlers_mutex;
-	std::condition_variable request_handlers_cv;
 
 public:
 	bool online{false};
@@ -124,23 +122,23 @@ private:
 	void client_process_loop(connected_client& client);
 
 	void add_client(const SOCKET_TYPE client_socket, connected_client& client) {
-		std::unique_lock client_lock(connected_clients_mutex);
-		connected_clients_cv.wait(client_lock);
+		while (!connected_clients_mutex.try_lock()) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
 
 		connected_clients.insert({ client_socket, client });
 
-		client_lock.unlock();
-		connected_clients_cv.notify_one();
+		connected_clients_mutex.unlock();
 	}
 
 	void remove_client(const SOCKET_TYPE client_socket) {
-		std::unique_lock client_lock(connected_clients_mutex);
-		connected_clients_cv.wait(client_lock);
+		while (!connected_clients_mutex.try_lock()) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
 
 		connected_clients.erase(client_socket);
 
-		client_lock.unlock();
-		connected_clients_cv.notify_one();
+		connected_clients_mutex.unlock();
 	};
 };
 
