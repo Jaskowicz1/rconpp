@@ -103,8 +103,8 @@ void rconpp::rcon_server::disconnect_client(const SOCKET_TYPE client_socket, con
 
 	client.connected = false;
 	client.authenticated = false;
-
-	on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has been disconnected from the server.");
+	
+	on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + " | Socket: " + std::to_string(client_socket) + "] has been disconnected from the server.");
 
 	if (remove_after) {
 		{
