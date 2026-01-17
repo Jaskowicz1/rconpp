@@ -21,6 +21,7 @@ namespace rconpp {
 constexpr int DEFAULT_TIMEOUT = 4; // In Seconds.
 constexpr int MAX_RETRIES_TO_RECEIVE_INFO = 5;
 constexpr int HEARTBEAT_TIME = 30;
+constexpr uint8_t MAX_AUTHENTICATION_ATTEMPTS = 3;
 
 // Packet constants.
 constexpr int MIN_PACKET_SIZE = 10;
@@ -107,7 +108,7 @@ enum error_type {
 };
 
 struct last_error {
-	error_type type_of_error{error_type::DISCONNECTED};
+	error_type type_of_error{DISCONNECTED};
 	int error_code{0};
 };
 

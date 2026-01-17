@@ -25,9 +25,10 @@ namespace rconpp {
 struct connected_client {
 	sockaddr_in sock_info{};
 	SOCKET_TYPE socket{0};
-	bool connected{false};
 
+	bool connected{false};
 	bool authenticated{false};
+	uint8_t authentication_attempts{0}; // Will never exceed MAX_AUTHENTICATION_ATTEMPTS
 
 	time_t last_heartbeat{0};
 };
