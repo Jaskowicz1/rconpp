@@ -126,7 +126,7 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 
 	if (packet_size == -1) {
 		const last_error err = get_last_error();
-		on_log("Failed to get a packet from client [Error code: " + std::to_string(err.error_code) + "]!");
+		on_log("Failed to read packet size from Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + " | Error code: " + std::to_string(err.error_code) + "]!");
 
 		// Since the client looks to have disconnected, we need to check their heartbeat immediately.
 		if (err.type_of_error == DISCONNECTED) {
@@ -146,7 +146,7 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 
 	if (recv(client.socket, buffer.data(), packet_size, MSG_NOSIGNAL) == -1) {
 		const last_error err = get_last_error();
-		on_log("Failed to get a packet from client [Error code: " + std::to_string(err.error_code) + "]!");
+		on_log("Failed to receive the full packet from Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + " | Error code: " + std::to_string(err.error_code) + "]!");
 
 		// Since the client looks to have disconnected, we need to check their heartbeat immediately.
 		if (err.type_of_error == DISCONNECTED) {
@@ -177,7 +177,7 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 	} else {
 		if (type != SERVERDATA_EXECCOMMAND) {
 			packet_to_send = form_packet("Invalid packet type (" + std::to_string(type) + "). Double check your packets.", id, SERVERDATA_RESPONSE_VALUE);
-			on_log("Invalid packet type (" + std::to_string(type) + ") sent by [" + inet_ntoa(client.sock_info.sin_addr) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]. Double check your packets.");
+			on_log("Invalid packet type (" + std::to_string(type) + ") sent by [" + inet_ntoa(client.sock_info.sin_addr) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]. Asking client to double check their packets.");
 		} else {
 			on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has asked to execute the command: \"" + packet_data + "\"");
 			if (!on_command) {
@@ -208,7 +208,7 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 
 	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, MSG_NOSIGNAL) < 0) {
 		const last_error err = get_last_error();
-		on_log("Sending failed [Error code: " + std::to_string(err.error_code) + "]!");
+		on_log("Failed to send a packet to Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + " | Error code: " + std::to_string(err.error_code) + "]!");
 
 		// Since the client looks to have disconnected, we need to check their heartbeat immediately.
 		if (err.type_of_error == DISCONNECTED) {
@@ -218,12 +218,12 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 }
 
 bool rconpp::rcon_server::send_heartbeat(connected_client& client) {
-	on_log("Sending heartbeat to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]");
+	on_log("Sending heartbeat to Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "]");
 
 	packet packet_to_send = form_packet("", -1, SERVERDATA_RESPONSE_VALUE);
 	if (send(client.socket, packet_to_send.data.data(), packet_to_send.length, MSG_NOSIGNAL) < 0) {
 		const last_error err = get_last_error();
-		on_log("Failed to send a heartbeat to client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] [Error code: " + std::to_string(err.error_code) + "]!");
+		on_log("Failed to send a heartbeat to Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + " | Error code: " + std::to_string(err.error_code) + "]!");
 		return false;
 	}
 
@@ -238,14 +238,12 @@ void rconpp::rcon_server::client_process_loop(connected_client& client) {
 
 		const time_t current_time = time(nullptr);
 
-		if (client.authenticated) {
-			if (client.last_heartbeat == 0 || current_time - client.last_heartbeat >= HEARTBEAT_TIME) {
-				if (!send_heartbeat(client)) {
-					on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + " | Socket: " + std::to_string(client.socket) + "] is now being disconnected.");
-					disconnect_client(client.socket);
-					// disconnect_client should do this, but we'll do it too.
-					client.connected = false;
-				}
+		if (client.last_heartbeat == 0 || current_time - client.last_heartbeat >= HEARTBEAT_TIME) {
+			if (!send_heartbeat(client)) {
+				on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + " | Socket: " + std::to_string(client.socket) + "] is now being disconnected.");
+				disconnect_client(client.socket);
+				// disconnect_client should do this, but we'll do it too.
+				client.connected = false;
 			}
 		}
 
@@ -297,6 +295,8 @@ void rconpp::rcon_server::start(bool return_after) {
 			client.sock_info = client_info;
 			client.socket = client_socket;
 			client.connected = true;
+			// We don't want to send a heartbeat instantly and confuse clients.
+			client.last_heartbeat = time(nullptr);
 
 			add_client(client_socket, client);
 
