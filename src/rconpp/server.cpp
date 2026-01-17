@@ -180,6 +180,7 @@ void rconpp::rcon_server::read_packet(connected_client& client) {
 
 			// Client has attempted too many authentication attempts, we should now remove them.
 			if (client.authentication_attempts >= MAX_AUTHENTICATION_ATTEMPTS) {
+				on_log("Client [" + std::string(inet_ntoa(client.sock_info.sin_addr)) + ":" + std::to_string(ntohs(client.sock_info.sin_port)) + "] has attempted too many authentication attempts!");
 				disconnect_client(client.socket);
 				return;
 			}
